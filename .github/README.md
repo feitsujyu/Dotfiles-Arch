@@ -1,0 +1,82 @@
+# dotfiles
+
+Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的桌面配置。配色统一为 Lilac（淡紫色）。
+
+| 程序 | 文件 | 内容 |
+|---|---|---|
+| mango | `.config/mango/config.conf` | 快捷键、动画、窗口规则、触控/手写笔绑定到笔记本屏幕、开机启动 |
+| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty |
+| | `.config/mango/wallpaperd/` | 预先准备好壁纸、切换时不卡顿的壁纸程序（C，需要编译） |
+| waybar | `.config/waybar/config.jsonc`, `style.css` | 底部状态栏 |
+| | `.config/waybar/scripts/` | Wi-Fi / 蓝牙 / 音量 / 亮度弹窗（Python + GTK3 layer shell） |
+| | `.config/waybar/barprobe/` | 找出状态栏模块位置、让弹窗对齐的小程序（C，需要编译） |
+| kitty | `.config/kitty/` | 终端 |
+| rofi | `.config/rofi/` | 程序启动器（Lilac 主题） |
+| fcitx5 | `.config/fcitx5/` | 输入法设置（经典界面使用 Lilac 主题） |
+| | `.local/share/fcitx5/themes/lilac/` | 输入法候选框主题 |
+| | `.local/share/fcitx5/inputmethod/tiger.conf` | 虎码输入法设置 |
+| | `.local/share/fcitx5/addon/repeatlast.conf`, `lua/repeatlast/` | `;` + 空格 重复上一次输入（fcitx5-lua） |
+| bash | `.bashrc` | 包括 `dotfiles` 命令 |
+
+## 在新电脑上恢复
+
+```bash
+git clone --bare https://github.com/feitsujyu/dotfiles.git "$HOME/.dotfiles"
+alias dotfiles='git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
+dotfiles config status.showUntrackedFiles no
+dotfiles checkout
+```
+
+如果 `checkout` 因为已有同名文件（例如系统自带的 `~/.bashrc`）报错，先把它们移走再执行一次：
+
+```bash
+mkdir -p ~/.dotfiles-backup
+dotfiles checkout 2>&1 | grep -E '^\s+' | awk '{print $1}' | while read -r f; do
+    mkdir -p ~/.dotfiles-backup/"$(dirname "$f")"
+    mv ~/"$f" ~/.dotfiles-backup/"$f"
+done
+dotfiles checkout
+```
+
+### 1. 安装程序
+
+```bash
+# 桌面（mangowm-git 在 AUR）
+mangowm-git waybar kitty rofi swaybg
+# 弹窗脚本
+python-gobject gtk3 gtk-layer-shell
+# 网络 / 蓝牙 / 声音 / 电源
+networkmanager bluez bluez-utils pipewire pipewire-pulse wireplumber upower power-profiles-daemon
+# 输入法
+fcitx5 fcitx5-chinese-addons fcitx5-gtk fcitx5-qt fcitx5-configtool fcitx5-lua inotify-tools
+# 字体
+ttf-jetbrains-mono-nerd noto-fonts noto-fonts-cjk noto-fonts-emoji
+# 编译 wallpaperd / barprobe
+base-devel wayland wayland-protocols
+```
+
+### 2. 编译两个小程序
+
+```bash
+~/.config/mango/wallpaperd/build.sh
+~/.config/waybar/barprobe/build.sh
+```
+
+### 3. 仓库里没有的东西
+
+- **虎码码表**：从虎码官方获取 fcitx5 版码表，放到 `~/.local/share/fcitx5/table/tiger.main.dict`。
+- **虎码图标**：放到 `~/.local/share/icons/input_icon_tiger-code.png`（`tiger.conf` 里写的是绝对路径 `/home/feitsujyu/...`，用户名不同时要改）。
+- **壁纸**：png / jpg 放到 `~/Pictures/background/`，按文件名顺序切换（`Super+W` / `Super+Shift+W`）。
+
+### 4. 重新登录 mango
+
+waybar、fcitx5、壁纸等都由 mango 的 `exec-once` 启动。
+
+## 日常使用
+
+```bash
+dotfiles status
+dotfiles add ~/.config/waybar/style.css   # 新文件要登记一次
+dotfiles commit -m "waybar: ..."
+dotfiles push
+```

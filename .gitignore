@@ -1,0 +1,22 @@
+# dotfiles 仓库（~/.dotfiles，工作目录是 ~）的排除规则
+# 没有用 `dotfiles add` 登记的文件本来就不会被管理；这里列出的是登记整个文件夹时也不应该放进去的东西。
+
+# 编译产物：新电脑上用 build.sh 重新编译
+build/
+.config/mango/wallpaperd/wallpaperd
+.config/waybar/barprobe/barprobe
+__pycache__/
+
+# 旧配置备份和测试残留
+*.bak-turn*
+.config/mango/test_mango.pid
+
+# 个人记录（不是配置）
+.config/waybar/mango-waybar_problem*.md
+
+# 虎码：个人词库、输入记录，以及别人发布的码表和图标（README 里写了怎么获取）
+.local/share/fcitx5/table/
+.local/share/icons/input_icon_tiger-code.png
+
+# fcitx5 自动生成的缓存
+.config/fcitx5/conf/cached_layouts

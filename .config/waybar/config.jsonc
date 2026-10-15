@@ -1,0 +1,158 @@
+// -*- mode: jsonc -*-
+{
+    "layer": "top",
+    "position": "bottom",
+    "height": 40, // turn 5：原为 30
+    "spacing": 4,
+    // 修改 style.css 后自动重新加载样式
+    "reload_style_on_change": true,
+
+    "modules-left": [
+        "ext/workspaces"
+    ],
+
+    "modules-center": [
+        // turn 6：wlr/taskbar 会列出所有窗口，改用只显示聚焦窗口的自定义模块
+        // "wlr/taskbar",
+        "custom/focused-window"
+    ],
+
+    "modules-right": [
+        "tray",
+        "bluetooth", // turn 41
+        "network",
+        "pulseaudio",
+        "backlight", // turn 48
+        "battery",
+        "clock"
+    ],
+
+    // 工作区（tag）编号 —— mango 上不能用 dwl/tags（会 segfault），用 ext/workspaces
+    // mango 已确认正确实现并 advertise 了 ext-workspace-v1 协议（见 src/ext-protocol/ext-workspace.c），可以放心用
+    "ext/workspaces": {
+        "format": "{name}",
+        // all-outputs：每块屏幕的栏上显示哪些工作区
+        //   false：只显示“这块屏幕自己”的工作区（接外接显示器时，各屏幕的栏互不混在一起）
+        //   true ：把所有屏幕的工作区都显示在每一块栏上（接了两块屏幕时，会出现两个同名的 “1”）
+        // turn 6 由 true 改为 false
+        "all-outputs": false,
+        "on-click": "activate",
+        "on-click-right": "deactivate",
+        "sort-by-id": true
+    },
+
+    // 窗口标题 —— mango 没有实现 dwl-ipc-unstable-v2 协议，dwl/window 100% 必崩，
+    // 改用 wlr/taskbar：mango 完整实现了 wlr-foreign-toplevel-management-unstable-v1
+    // （见 src/ext-protocol/foreign-toplevel.c + main.c 里的 wlr_foreign_toplevel_manager_v1_create）
+    // 注意（turn 6 查明）：waybar 0.15.0 的 wlr/taskbar 并没有 active-only 这个选项，写了也会被忽略，
+    // 所以它会列出屏幕上的所有窗口。现在 modules-center 里已改用下面的 custom/focused-window，
+    // 这一段保留备用（想显示所有窗口时，把 modules-center 换回 "wlr/taskbar" 即可）
+    "wlr/taskbar": {
+        "format": "{title}",
+        "active-only": true,
+        "all-outputs": false,
+        "truncate": true,
+        "tooltip-format": "{app_id} - {title}",
+        "on-click": "activate"
+    },
+
+    // 窗口标题（只显示本屏幕上聚焦的窗口）—— turn 6
+    // 脚本通过 mango 的 IPC（mmsg watch monitor <屏幕名>）监听，每块屏幕的栏显示各自聚焦的窗口；
+    // 没有聚焦窗口（空的 tag）时脚本输出空文字，模块自动隐藏
+    "custom/focused-window": {
+        "exec": "~/.config/waybar/scripts/focused-window.py",
+        "return-type": "json",
+        "max-length": 80
+    },
+
+    // 系统托盘（turn 12）：fcitx5 等程序的托盘图标会显示在这里（右键可以打开菜单）
+    "tray": {
+        "icon-size": 16,
+        "spacing": 8
+    },
+
+    // 蓝牙（turn 41）：waybar 自带的模块，通过 DBus 直接读取 bluez 的状态
+    //   关闭 󰂲 / 开启 󰂯 / 连接了设备 󰂱 + 设备名（设备能报告电量时再加上电量）
+    //   连接了多个设备时只显示其中一个的名字，鼠标悬停可以看到全部
+    "bluetooth": {
+        "format": "󰂯",
+        "format-on": "󰂯",
+        "format-off": "󰂲",
+        "format-disabled": "󰂲",
+        "format-no-controller": "",
+        "format-connected": "󰂱 {device_alias}",
+        "format-connected-battery": "󰂱 {device_alias} {device_battery_percentage}%",
+        "max-length": 24,
+        "tooltip-format": "蓝牙已开启（没有连接设备）\n左键：设备列表　右键：关闭蓝牙",
+        "tooltip-format-off": "蓝牙已关闭\n右键：打开蓝牙",
+        "tooltip-format-disabled": "蓝牙已关闭\n右键：打开蓝牙",
+        "tooltip-format-connected": "已连接 {num_connections} 个设备：\n{device_enumerate}\n\n左键：设备列表　右键：关闭蓝牙",
+        "tooltip-format-enumerate-connected": "  {device_alias}",
+        "tooltip-format-enumerate-connected-battery": "  {device_alias}  󰥉 {device_battery_percentage}%",
+        // 左键：显示 / 隐藏蓝牙弹窗（bluetooth-popup.py：开关、搜索、配对、连接 / 断开）
+        // 右键：打开 / 关闭蓝牙（bluetooth-power.sh）
+        "on-click": "~/.config/waybar/scripts/bluetooth-popup-toggle.sh",
+        "on-click-right": "~/.config/waybar/scripts/bluetooth-power.sh"
+    },
+
+    // 网络状态
+    "network": {
+        // turn 42：只显示图标和信号强度（Wi-Fi 名移到鼠标悬停的提示里）
+        // 原设定："format-wifi": "󰖩 {essid} ({signalStrength}%)",
+        "format-wifi": "󰖩 {signalStrength}%",
+        "format-ethernet": "󰈀 {ipaddr}/{cidr}",
+        "format-disconnected": "󰤮 Disconnected",
+        // 鼠标悬停的提示（turn 42）：Wi-Fi 连接中 → Wi-Fi 名；没有连接 → 未连接
+        // 原设定只有下面这一行（Wi-Fi 时也显示 “wlp1s0 via 192.168.0.1”），现在只用于有线网络
+        "tooltip-format": "{ifname} via {gwaddr}",
+        "tooltip-format-wifi": "{essid}",
+        "tooltip-format-disconnected": "未连接",
+        // turn 30：左键显示 / 隐藏 Wi-Fi 弹窗（wifi-popup.py，从模块上方淡入；点外面、Esc、再点一次都会关闭）
+        //          右键在 kitty 里打开 nmtui（NetworkManager 自带的文字界面，弹窗处理不了的情况用它）
+        // turn 22 的 rofi 版菜单：把下面的 on-click 改成 "~/.config/waybar/scripts/wifi-menu.py" 就能换回去
+        "on-click": "~/.config/waybar/scripts/wifi-popup-toggle.sh",
+        "on-click-right": "kitty --directory ~ nmtui"
+    },
+
+    // 音量
+    "pulseaudio": {
+        "format": "{icon} {volume}%",
+        "format-muted": "󰝟 {volume}%",
+        "format-icons": {
+            "default": ["󰕿", "󰖀", "󰕾"]
+        },
+        // turn 34：左键显示 / 隐藏音量弹窗（音量滑块、静音、输出设备、各个程序单独音量）
+        //          （原设定 "pavucontrol" 没有安装，点了没反应）；滚轮调音量是 waybar 自带的功能（每格 1%）
+        "on-click": "~/.config/waybar/scripts/volume-popup-toggle.sh"
+    },
+
+    // 屏幕亮度（turn 48）：waybar 自带的模块，读取 /sys/class/backlight
+    "backlight": {
+        "format": "{icon} {percent}%",
+        "format-icons": ["󰃞", "󰃟", "󰃠"],
+        "tooltip-format": "亮度 {percent}%",
+        // 左键：显示 / 隐藏亮度弹窗（brightness-popup.py：滑块、常用亮度按钮）
+        "on-click": "~/.config/waybar/scripts/brightness-popup-toggle.sh",
+        // 滚轮：和亮度键一样每格 ±5%（最低 5%）
+        "on-scroll-up": "~/.config/mango/scripts/brightness.sh up",
+        "on-scroll-down": "~/.config/mango/scripts/brightness.sh down"
+    },
+
+    // 电池
+    "battery": {
+        "format": "{icon} {capacity}%",
+        "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
+        "format-charging": "󰂄 {capacity}%",
+        "format-plugged": "󰂄 {capacity}%",
+        "states": {
+            "warning": 30,
+            "critical": 15
+        }
+    },
+
+    // 时钟：日期+时间合并显示
+    "clock": {
+        "format": "{:%m-%d %H:%M}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    }
+}

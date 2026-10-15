@@ -1,0 +1,125 @@
+/* Lilac —— 配合 ~/Pictures/background 的壁纸
+ * 颜色和 kitty（current-theme.conf）、waybar（style.css）、mango（config.conf）一致：
+ *   ink    #1f1a3d  深靛紫：背景（= kitty background）
+ *   text   #c9b9f2  浅淡紫：文字（= kitty foreground）
+ *   muted  #8e8c9e  灰紫：占位文字、次要信息（= kitty color8）
+ *   surface#3a3470  深紫：输入框底色（= waybar 胶囊）
+ *   accent #6c5cc4  长春花紫（= mango 未聚焦边框）
+ *   focus  #f5a0c8  樱粉：边框、选中项（= mango 聚焦边框 / kitty 光标 / waybar 当前工作区）
+ */
+
+* {
+    ink:        #1f1a3d;
+    text:       #c9b9f2;
+    muted:      #8e8c9e;
+    surface:    #3a3470;
+    accent:     #6c5cc4;
+    focus:      #f5a0c8;
+    critical:   #f07a9a;
+
+    background-color: transparent;
+    text-color:       @text;
+    font:             "JetBrainsMono Nerd Font 13";
+}
+
+window {
+    width:            640px;
+    /* 和 kitty 一样半透明（kitty 是 0.85，这里稍微不透明一些，保证文字清楚） */
+    background-color: #1f1a3de6;
+    /* rofi 打开时就是焦点所在，所以用聚焦色（樱粉）做边框，粗细和 mango 的 borderpx 一致 */
+    border:           3px;
+    border-color:     @focus;
+    border-radius:    10px;
+    padding:          14px;
+}
+
+mainbox {
+    spacing:  10px;
+    children: [ inputbar, message, listview ];
+}
+
+/* ---------- 输入栏：左边是樱粉色的模式标签，右边是输入框 ---------- */
+
+inputbar {
+    spacing:  8px;
+    children: [ prompt, entry ];
+}
+
+prompt {
+    background-color: @focus;
+    text-color:       @ink;
+    padding:          6px 12px;
+    border-radius:    8px;
+}
+
+entry {
+    background-color:  @surface;
+    text-color:        @text;
+    placeholder:       "搜索…";
+    placeholder-color: @muted;
+    padding:           6px 12px;
+    border-radius:     8px;
+    cursor-color:      @focus;
+}
+
+/* ---------- 列表 ---------- */
+
+message {
+    background-color: @surface;
+    border-radius:    8px;
+    padding:          6px 12px;
+}
+
+listview {
+    lines:     8;
+    columns:   1;
+    spacing:   4px;
+    scrollbar: false;
+    fixed-height: true;
+}
+
+element {
+    padding:       6px 10px;
+    spacing:       10px;
+    border-radius: 8px;
+}
+
+element normal.normal,
+element alternate.normal {
+    background-color: transparent;
+    text-color:       @text;
+}
+
+/* 选中项：和 waybar 的“当前工作区”一样，樱粉底 + 深色字 */
+element selected.normal {
+    background-color: @focus;
+    text-color:       @ink;
+}
+
+element normal.urgent,
+element alternate.urgent {
+    text-color: @critical;
+}
+element selected.urgent {
+    background-color: @critical;
+    text-color:       @ink;
+}
+
+element normal.active,
+element alternate.active {
+    text-color: @accent;
+}
+element selected.active {
+    background-color: @accent;
+    text-color:       @ink;
+}
+
+element-icon {
+    size:       24px;
+    text-color: inherit;
+}
+
+element-text {
+    text-color:     inherit;
+    vertical-align: 0.5;
+}
