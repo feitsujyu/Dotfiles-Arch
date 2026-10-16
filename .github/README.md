@@ -21,7 +21,7 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 ## 在新电脑上恢复
 
 ```bash
-git clone --bare https://github.com/feitsujyu/dotfiles.git "$HOME/.dotfiles"
+git clone --bare https://github.com/feitsujyu/Dotfiles-Arch.git "$HOME/.dotfiles"
 alias dotfiles='git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
 dotfiles config status.showUntrackedFiles no
 dotfiles checkout
