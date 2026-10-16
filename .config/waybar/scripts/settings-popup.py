@@ -8,9 +8,12 @@
 # · 点击外面自动关闭（后面铺一层完全透明的全屏图层 “settings-menu-catcher”）
 # · 打开时查一下模块现在的位置，弹窗的右边对准模块的右边（popup_anchor.py）
 #
-# 画面：
+# 画面：两层
+# · 第一层：设置的分类，每个分类一行（右边是现在设定的摘要）；点一下进入这个分类的第二层
+# · 第二层：这个分类的设置。标题栏左边的 ‹ 或 Esc 回到第一层
+# 分类：
 # · 显示器：每块连接着的屏幕的缩放比例；外接屏放在内置屏的哪一边
-#   以后要加别的设置时，在 build() 里加新的分区
+#   以后要加别的分类时，写“建第二层画面”和“摘要”两个函数，加到 SettingsPopup.categories 里
 #
 # 显示器的设置写在 ~/.config/mango/local.conf（config.conf 用 source_optional 读入，不放进 dotfiles 仓库）。
 # mango 发现文件变了会自动重新加载，所以点了按钮马上生效。
@@ -33,7 +36,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("GLibUnix", "2.0")
 gi.require_version("GtkLayerShell", "0.1")
-from gi.repository import Gdk, GLib, GLibUnix, Gtk, GtkLayerShell  # noqa: E402
+from gi.repository import Gdk, GLib, GLibUnix, Gtk, GtkLayerShell, Pango  # noqa: E402
 
 # 弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
 sys.dont_write_bytecode = True  # 不在 scripts 目录里生成 __pycache__
@@ -46,7 +49,8 @@ WIDTH = 440             # 弹窗宽度
 MARGIN_RIGHT = 6        # 离屏幕右边的距离（只在查不到模块位置时使用，见 place）
 MARGIN_BOTTOM = 8       # 离 waybar 的距离
 SCALES = (1.0, 1.25, 1.5, 1.75, 2.0)
-POSITIONS = (("right", "右边"), ("left", "左边"), ("above", "上边"))
+POSITIONS = (("right", "右边"), ("left", "左边"), ("above", "上边"), ("below", "下边"))
+SLIDE_MS = 150          # 两层之间切换的动画时间
 INTERNAL = re.compile(r"^eDP")   # 笔记本内置屏的接口名
 NAMESPACE = "settings-menu"
 
@@ -75,6 +79,13 @@ window, window.background { background-color: transparent; }
 .name { font-weight: bold; }
 .key { color: #8e8c9e; font-size: 11pt; min-width: 40px; }
 .card { background-color: rgba(58, 52, 112, 0.45); border-radius: 8px; padding: 8px 10px; }
+#back { padding: 2px 10px; }
+#back label { font-size: 13pt; }
+button.item { background-color: rgba(58, 52, 112, 0.45); padding: 8px 10px; }
+button.item:hover { background-color: #3a3470; }
+.item-icon { color: #f5a0c8; font-size: 15pt; min-width: 28px; }
+.item-name { font-size: 13pt; font-weight: bold; }
+.arrow { color: #8e8c9e; }
 /* transition: none —— 关掉系统主题（Adwaita）给按钮加的过渡动画（和其他弹窗一样） */
 button {
     background-color: #3a3470; background-image: none; color: #c9b9f2;
@@ -158,8 +169,8 @@ def read_local():
 
 def layout(monitors, scales, positions):
     """连接着的屏幕的位置 {屏幕名: (x, y)}
-    内置屏（没有的话是第一块）放在 (0,0)，其他屏幕按记住的位置（右边 / 左边 / 上边）紧挨着排，
-    最后整体平移，让左上角是 (0,0)。上下边对齐的方式：左右排列时上边对齐，放在上边时左右居中。"""
+    内置屏（没有的话是第一块）放在 (0,0)，其他屏幕按记住的位置（右边 / 左边 / 上边 / 下边）紧挨着排，
+    最后整体平移，让左上角是 (0,0)。对齐的方式：左右排列时上边对齐，上下排列时左右居中。"""
     if not monitors:
         return {}
     ordered = sorted(monitors, key=lambda m: (not is_internal(m["name"]), m["name"]))
@@ -171,7 +182,7 @@ def layout(monitors, scales, positions):
     first = ordered[0]["name"]
     pos = {first: (0, 0)}
     fw, fh = size[first]
-    left, right, top = 0, fw, 0
+    left, right, top, bottom = 0, fw, 0, fh
     for m in ordered[1:]:
         n = m["name"]
         w, h = size[n]
@@ -182,6 +193,9 @@ def layout(monitors, scales, positions):
         elif where == "above":
             pos[n] = ((fw - w) // 2, top - h)
             top -= h
+        elif where == "below":
+            pos[n] = ((fw - w) // 2, bottom)
+            bottom += h
         else:
             pos[n] = (right, 0)
             right += w
@@ -240,8 +254,26 @@ class SettingsPopup:
         self.win = self.make_window(NAMESPACE, catcher=False)
         self.catcher = self.make_window(NAMESPACE + "-catcher", catcher=True)
 
+        # 分类：(名字, 图标, 标题, 建第二层画面的函数, 摘要的函数)
+        self.categories = [
+            ("monitors", "󰍹", "显示器", self.build_monitors, self.monitors_summary),
+        ]
+        self.page = "home"
+
         self.panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, name="panel")
         self.panel.set_size_request(WIDTH, -1)
+        self.head = Gtk.Box(spacing=8)
+        self.panel.pack_start(self.head, False, False, 0)
+        self.stack = Gtk.Stack()
+        self.stack.set_vhomogeneous(False)        # 高度跟着现在这一层变
+        self.stack.set_transition_duration(SLIDE_MS)
+        self.stack.connect("notify::transition-running", self.on_transition)
+        self.pages = {}
+        for key in ["home"] + [c[0] for c in self.categories]:
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            self.pages[key] = box
+            self.stack.add_named(box, key)
+        self.panel.pack_start(self.stack, False, False, 0)
         self.win.add(self.panel)
         self.win.connect("key-press-event", self.on_key)
         self.build()
@@ -250,22 +282,79 @@ class SettingsPopup:
 
     # ---------- 画面 ----------
     def build(self):
-        for child in self.panel.get_children():
-            self.panel.remove(child)
-        head = Gtk.Box(spacing=8)
-        head.pack_start(Gtk.Label(label="设置", name="title"), False, False, 0)
-        self.panel.pack_start(head, False, False, 0)
-        self.build_monitors()
+        """重建标题栏和所有的层（数值变了时调用；现在显示的是哪一层不变）"""
+        self.build_head()
+        for key, box in self.pages.items():
+            for child in box.get_children():
+                box.remove(child)
+        self.build_home(self.pages["home"])
+        for key, _icon, _title, build, _summary in self.categories:
+            build(self.pages[key])
         self.panel.show_all()
+        self.stack.set_visible_child_name(self.page)
 
-    def build_monitors(self):
-        sec = Gtk.Label(label="显示器", xalign=0)
-        sec.get_style_context().add_class("section")
-        self.panel.pack_start(sec, False, False, 0)
+    def build_head(self):
+        for child in self.head.get_children():
+            self.head.remove(child)
+        if self.page == "home":
+            self.head.pack_start(Gtk.Label(label="设置", name="title"), False, False, 0)
+        else:
+            back = Gtk.Button(label="‹", name="back")
+            back.connect("clicked", lambda _b: self.go("home"))
+            title = next(c[2] for c in self.categories if c[0] == self.page)
+            self.head.pack_start(back, False, False, 0)
+            self.head.pack_start(Gtk.Label(label=f"设置 › {title}", name="title"), False, False, 0)
+        self.head.show_all()
+
+    def build_home(self, box):
+        for key, icon, title, _build, summary in self.categories:
+            b = Gtk.Button()
+            b.get_style_context().add_class("item")
+            row = Gtk.Box(spacing=8)
+            i = Gtk.Label(label=icon)
+            i.get_style_context().add_class("item-icon")
+            t = Gtk.Label(label=title, xalign=0)
+            t.get_style_context().add_class("item-name")
+            sub = Gtk.Label(label=summary(), xalign=1)
+            sub.get_style_context().add_class("sub")
+            sub.set_ellipsize(Pango.EllipsizeMode.END)  # 太长时省略
+            arrow = Gtk.Label(label="›")
+            arrow.get_style_context().add_class("arrow")
+            row.pack_start(i, False, False, 0)
+            row.pack_start(t, False, False, 0)
+            row.pack_start(sub, True, True, 0)
+            row.pack_start(arrow, False, False, 0)
+            b.add(row)
+            b.connect("clicked", lambda _b, k=key: self.go(k))
+            box.pack_start(b, False, False, 0)
+
+    def go(self, page):
+        """切换到某一层：进入分类时向左滑，回到第一层时向右滑"""
+        forward = page != "home"
+        self.page = page
+        self.build_head()
+        self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT if forward
+                                       else Gtk.StackTransitionType.SLIDE_RIGHT)
+        self.stack.set_visible_child_name(page)
+        if not self.stack.get_transition_running():
+            self.win.resize(WIDTH, 1)
+
+    def on_transition(self, stack, _param):
+        if not stack.get_transition_running():
+            self.win.resize(WIDTH, 1)  # 换到矮的一层后，窗口也跟着变矮
+
+    def monitors_summary(self):
+        if not self.monitors:
+            return ""
+        ordered = sorted(self.monitors, key=lambda m: (not is_internal(m["name"]), m["name"]))
+        return " · ".join(f"{m['name']} {fmt_scale(m.get('scale', 1.0))}" for m in ordered)
+
+    # ---------- 分类：显示器 ----------
+    def build_monitors(self, box):
         if not self.monitors:
             msg = Gtk.Label(label="取不到屏幕的信息（mmsg 不能用）", xalign=0)
             msg.get_style_context().add_class("sub")
-            self.panel.pack_start(msg, False, False, 0)
+            box.pack_start(msg, False, False, 0)
             return
         scales, positions, _ = read_local()
         ordered = sorted(self.monitors, key=lambda m: (not is_internal(m["name"]), m["name"]))
@@ -293,7 +382,7 @@ class SettingsPopup:
                 label = f"在 {first} 的"
                 card.pack_start(self.button_row(label, POSITIONS, where,
                                                 lambda v, n=n: self.set_position(n, v)), False, False, 0)
-            self.panel.pack_start(card, False, False, 0)
+            box.pack_start(card, False, False, 0)
 
     def button_row(self, key, items, current, on_click):
         row = Gtk.Box(spacing=6)
@@ -435,6 +524,8 @@ class SettingsPopup:
             return
         self.visible = True
         self.monitors = mmsg_monitors() or self.monitors
+        self.page = "home"     # 每次打开都从第一层开始
+        self.stack.set_transition_type(Gtk.StackTransitionType.NONE)
         self.build()
         self.place()
         self.catcher.show()
@@ -469,7 +560,10 @@ class SettingsPopup:
 
     def on_key(self, win, ev):
         if ev.keyval == Gdk.KEY_Escape:
-            self.hide()
+            if self.page != "home":
+                self.go("home")
+            else:
+                self.hide()
             return True
         return False
 
