@@ -25,6 +25,10 @@ git clone --bare https://github.com/feitsujyu/Dotfiles-Arch.git "$HOME/.dotfiles
 alias dotfiles='git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
 dotfiles config status.showUntrackedFiles no
 dotfiles checkout
+# 让 dotfiles status 能显示和 GitHub 相比新 / 旧几个提交（bare 克隆默认不设置）
+dotfiles config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+dotfiles fetch
+dotfiles branch -u origin/main main
 ```
 
 如果 `checkout` 因为已有同名文件（例如系统自带的 `~/.bashrc`）报错，先把它们移走再执行一次：
@@ -82,6 +86,23 @@ waybar、fcitx5、壁纸等都由 mango 的 `exec_once` 启动。
 ```bash
 mango -c ~/.config/mango/config.conf -p   # 只检查，不启动；有错误时会列出行号
 ```
+
+## 取得最新的配置（已经恢复过的电脑）
+
+```bash
+dotfiles pull
+```
+
+- 如果本地改过同一个文件，`pull` 会停下来，不会覆盖。先用 `dotfiles diff` 看改了什么：
+  - 不要的改动：`dotfiles checkout -- <文件>` 还原，再 `pull`
+  - 要保留的改动：先 `dotfiles commit`，再 `pull`（会合并两边的修改）
+  - fcitx5 在设置界面里保存时会改写 `~/.config/fcitx5/config` 和 `profile`，这两个文件常常会出现这种情况
+- `pull` 之后：
+  - mango 的 `config.conf`、waybar 的 `style.css`：保存后会自动重新加载，不用做什么
+  - waybar 的 `config.jsonc`、各个弹窗脚本、fcitx5 的主题：重新登录 mango 最简单
+    （只想重启 fcitx5 时：`fcitx5 -r -d`）
+  - `wallpaperd.c`、`barprobe.c` 改了的话：重新执行各自的 `build.sh`
+- 只想先看看 GitHub 上有什么新的提交：`dotfiles fetch` 后 `dotfiles log --oneline main..origin/main`
 
 ## 日常使用
 
