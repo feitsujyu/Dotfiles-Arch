@@ -50,7 +50,7 @@ MARGIN_RIGHT = 6        # 离屏幕右边的距离（只在查不到模块位置
 MARGIN_BOTTOM = 8       # 离 waybar 的距离
 SCALES = (1.0, 1.25, 1.5, 1.75, 2.0)
 POSITIONS = (("right", "右边"), ("left", "左边"), ("above", "上边"), ("below", "下边"))
-SLIDE_MS = 150          # 两层之间切换的动画时间
+SLIDE_MS = 250          # 两层之间切换的动画时间（滑动，同时弹窗的高度从旧的一层伸缩到新的一层）
 INTERNAL = re.compile(r"^eDP")   # 笔记本内置屏的接口名
 NAMESPACE = "settings-menu"
 
@@ -266,8 +266,8 @@ class SettingsPopup:
         self.panel.pack_start(self.head, False, False, 0)
         self.stack = Gtk.Stack()
         self.stack.set_vhomogeneous(False)        # 高度跟着现在这一层变
+        self.stack.set_interpolate_size(True)     # 切换时高度也平滑地变化
         self.stack.set_transition_duration(SLIDE_MS)
-        self.stack.connect("notify::transition-running", self.on_transition)
         self.pages = {}
         for key in ["home"] + [c[0] for c in self.categories]:
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -336,12 +336,12 @@ class SettingsPopup:
         self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT if forward
                                        else Gtk.StackTransitionType.SLIDE_RIGHT)
         self.stack.set_visible_child_name(page)
-        if not self.stack.get_transition_running():
-            self.win.resize(WIDTH, 1)
+        # layer-shell 的窗口不会自己变小：切换期间每一帧都按现在的高度重设窗口大小
+        self.stack.add_tick_callback(self.follow_size)
 
-    def on_transition(self, stack, _param):
-        if not stack.get_transition_running():
-            self.win.resize(WIDTH, 1)  # 换到矮的一层后，窗口也跟着变矮
+    def follow_size(self, _widget, _clock):
+        self.win.resize(WIDTH, 1)
+        return self.stack.get_transition_running()
 
     def monitors_summary(self):
         if not self.monitors:
