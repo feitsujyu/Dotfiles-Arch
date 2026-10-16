@@ -5,11 +5,11 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 | 程序 | 文件 | 内容 |
 |---|---|---|
 | mango | `.config/mango/config.conf` | 快捷键、动画、窗口规则、开机启动 |
-| | `.config/mango/local.conf.example` | 每台电脑自己的设置（屏幕的缩放和位置、触屏绑定到哪块屏幕）的样本 |
+| | `.config/mango/local.conf.example` | 每台电脑自己的设置（`local.conf`，不放进仓库）的说明 |
 | | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty |
 | | `.config/mango/wallpaperd/` | 预先准备好壁纸、切换时不卡顿的壁纸程序（C，需要编译） |
 | waybar | `.config/waybar/config.jsonc`, `style.css` | 底部状态栏 |
-| | `.config/waybar/scripts/` | Wi-Fi / 蓝牙 / 音量 / 亮度弹窗（Python + GTK3 layer shell） |
+| | `.config/waybar/scripts/` | Wi-Fi / 蓝牙 / 音量 / 亮度 / 设置弹窗（Python + GTK3 layer shell） |
 | | `.config/waybar/barprobe/` | 找出状态栏模块位置、让弹窗对齐的小程序（C，需要编译） |
 | kitty | `.config/kitty/` | 终端 |
 | rofi | `.config/rofi/` | 程序启动器（Lilac 主题） |
@@ -69,21 +69,16 @@ swaybg
 ~/.config/waybar/barprobe/build.sh
 ```
 
-### 3. 这台电脑自己的屏幕 / 触屏设置
+### 3. 屏幕的缩放和位置
 
-屏幕的名字、分辨率、触屏的型号每台电脑都不一样，所以写在不放进仓库的 `~/.config/mango/local.conf` 里：
+不用手动设置。进入 mango 后点 waybar 最右边的齿轮图标，在设置弹窗里选每块屏幕的缩放和外接屏的位置（内置屏的右边 / 左边 / 上边）。
 
-```bash
-cp ~/.config/mango/local.conf.example ~/.config/mango/local.conf
-```
+- 设置写在 `~/.config/mango/local.conf`（每台电脑各自的文件，不放进仓库），mango 会自动重新加载，马上生效
+- 屏幕的位置按缩放后的大小自动算好，屏幕之间不会空出一段
+- 插上 / 拔掉显示器时，按记住的设置自动重新排列
+- 触屏和触控笔自动固定在笔记本内置的屏幕（`config.conf` 的 `device_rule=type:touch,...`），不用查设备名
 
-然后按样本里的说明修改：
-
-- 屏幕名：`mmsg get all-monitors`
-- 触屏的设备名：`grep -i 'Name=' /proc/bus/input/devices`
-- 并排的屏幕：右边屏幕的 `x` = 左边屏幕缩放后的宽度（分辨率的宽 ÷ scale）。写大了中间会空出一段，鼠标过不去。
-
-没有 `local.conf` 也能用：所有屏幕都是 100%，自动从左往右排列。
+没有 `local.conf` 时：所有屏幕都是 100%，自动从左往右排列。
 
 ### 4. 仓库里没有的东西
 

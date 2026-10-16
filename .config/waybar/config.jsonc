@@ -23,7 +23,8 @@
         "pulseaudio",
         "backlight",
         "battery",
-        "clock"
+        "clock",
+        "custom/settings"
     ],
 
     // 工作区（tag）编号 —— mango 上不能用 dwl/tags（会 segfault），用 ext/workspaces
@@ -136,5 +137,14 @@
     "clock": {
         "format": "{:%m-%d %H:%M}",
         "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+
+    // 设置（齿轮）：左键显示 / 隐藏设置弹窗（settings-popup.py：屏幕的缩放和位置等）
+    //   图标和提示是固定的，所以只在启动时输出一次（interval: once）
+    "custom/settings": {
+        "exec": "echo '{\"text\": \"󰒓\", \"tooltip\": \"设置\"}'",
+        "return-type": "json",
+        "interval": "once",
+        "on-click": "~/.config/waybar/scripts/settings-popup-toggle.sh"
     }
 }

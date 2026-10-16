@@ -107,7 +107,8 @@ tooltip label {
 #pulseaudio,
 #backlight,
 #battery,
-#clock {
+#clock,
+#custom-settings {
     padding: 0 10px;
     margin: 3px 0;
     border-radius: 10px;
@@ -116,10 +117,15 @@ tooltip label {
 }
 
 #clock {
-    margin-right: 6px;
     background-color: @focus;
     color: @ink;
     font-weight: bold;
+}
+
+/* 设置（齿轮）：栏的最右端 */
+#custom-settings {
+    margin-right: 6px;
+    padding: 0 12px 0 10px;
 }
 
 /* 系统托盘 */
