@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-  <!-- 输入框的背景（turn 52）：深靛紫（0.94 不透明）+ 粉色边框，外侧圆角 10px（和 waybar 弹窗相同）
-       fcitx5 按 theme.conf 的 Margin（四边各 14px）保持四个角不变，只拉伸中间
-       turn 53：边框 3px → 2px（原设定：x="1.5" y="1.5" width="37" height="37" rx="8.5" ry="8.5" stroke-width="3"） -->
+  <!-- 输入框的背景：深靛紫（0.94 不透明）+ 2px 粉色边框，外侧圆角 10px（和 waybar 弹窗相同）
+       fcitx5 按 theme.conf 的 Margin（四边各 14px）保持四个角不变，只拉伸中间 -->
   <rect x="1" y="1" width="38" height="38" rx="9" ry="9"
         fill="#1f1a3d" fill-opacity="0.94" stroke="#f5a0c8" stroke-width="2"/>
 </svg>

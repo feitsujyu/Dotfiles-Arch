@@ -1,4 +1,4 @@
-/* rofi 配置（turn 10）
+/* rofi 配置
  * rofi 启动时会读取 ~/.config/rofi/config.rasi
  * 主题写在 ~/.config/rofi/themes/lilac.rasi（和 kitty / waybar / mango 使用同一套 Lilac 配色）
  */

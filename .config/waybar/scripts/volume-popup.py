@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-# 音量弹窗（turn 34）：点击 waybar 的音量模块时，从模块上方淡入显示
+# 音量弹窗：点击 waybar 的音量模块时，从模块上方淡入显示
 #
-# 做法和 Wi-Fi 弹窗（wifi-popup.py，turn 30）相同：
+# 做法和 Wi-Fi 弹窗（wifi-popup.py）相同：
 # · 常驻后台（平时隐藏），收到 SIGUSR1 时 显示 ⇄ 隐藏（由 volume-popup-toggle.sh 发送）
 # · gtk-layer-shell 的图层，图层名 “volume-menu”；淡入淡出 FADE_MS（0.2 秒）由程序自己做，
-#   mango 那边对这个图层设置 noanim:1
+#   mango 那边对这个图层设置 no_animation:1
 # · 点击外面自动关闭（后面铺一层完全透明的全屏图层 “volume-menu-catcher”）
 #
 # 画面：
@@ -31,7 +31,7 @@ gi.require_version("GLibUnix", "2.0")
 gi.require_version("GtkLayerShell", "0.1")
 from gi.repository import Gdk, GLib, GLibUnix, Gtk, GtkLayerShell, Pango  # noqa: E402
 
-# turn 46：弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
+# 弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
 sys.dont_write_bytecode = True  # 不在 scripts 目录里生成 __pycache__
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import popup_anchor  # noqa: E402
@@ -39,8 +39,8 @@ import popup_anchor  # noqa: E402
 # ---------- 设置 ----------
 FADE_MS = 200           # 淡入 / 淡出的时间（毫秒）
 WIDTH = 400             # 弹窗宽度
-MARGIN_RIGHT = 191      # 离屏幕右边的距离（对准 waybar 的音量模块；turn 44 换字体后由 192 改为 191）
-#   turn 46 起：每次打开时查模块的实际位置（place），这个值只在查不到时使用
+MARGIN_RIGHT = 191      # 离屏幕右边的距离（对准 waybar 的音量模块）
+#   每次打开时会查模块的实际位置（place），这个值只在查不到时使用
 MARGIN_BOTTOM = 8       # 离 waybar 的距离
 MAX_VOLUME = 100        # 滑块的最大值（%）
 SET_INTERVAL_MS = 40    # 拖动滑块时，最多每隔多少毫秒实际设置一次音量
@@ -69,7 +69,7 @@ window, window.background { background-color: transparent; }
 .section { color: #8e8c9e; font-size: 11pt; margin-top: 4px; }
 .sub { color: #8e8c9e; font-size: 10pt; }
 .percent { min-width: 48px; }
-/* transition: none —— 关掉系统主题（Adwaita）给按钮、行加的过渡动画（和 Wi-Fi 弹窗的 turn 31 一样） */
+/* transition: none —— 关掉系统主题（Adwaita）给按钮、行加的过渡动画（和 Wi-Fi 弹窗一样） */
 button {
     background-color: transparent; background-image: none; color: #c9b9f2;
     border: none; border-radius: 8px; box-shadow: none; text-shadow: none;
@@ -476,7 +476,7 @@ class VolumePopup:
         return False
 
     def place(self):
-        """turn 46：查一下“现在”模块在哪里，弹窗的右边对准模块的右边，显示在点击的那块屏幕上
+        """查一下“现在”模块在哪里，弹窗的右边对准模块的右边，显示在点击的那块屏幕上
         （约 20～25ms；查不到时保持上一次的位置，第一次是 MARGIN_RIGHT）"""
         pos = popup_anchor.locate()
         if pos is None:
@@ -548,7 +548,7 @@ def main():
         f.write(str(os.getpid()))
 
     popup = VolumePopup()
-    # 不能在信号的回调里直接显示窗口（会卡在 gtk-layer-shell 显示图层的地方，turn 30），所以交给 idle
+    # 不能在信号的回调里直接显示窗口（会卡在 gtk-layer-shell 显示图层的地方），所以交给 idle
     GLibUnix.signal_add(GLib.PRIORITY_HIGH, signal.SIGUSR1,
                         lambda: (GLib.idle_add(popup.toggle), True)[1])
     GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, lambda: (Gtk.main_quit(), False)[1])

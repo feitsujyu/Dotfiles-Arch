@@ -72,7 +72,16 @@ swaybg
 
 ### 4. 重新登录 mango
 
-waybar、fcitx5、壁纸等都由 mango 的 `exec-once` 启动。
+waybar、fcitx5、壁纸等都由 mango 的 `exec_once` 启动。
+
+## 注意：mango 的版本
+
+配置是按 mango 0.18 的写法（`monitor_rule`、`exec_once` 这类用下划线的名字）写的，0.17 及更早的版本读不了。
+`mangowm-git` 每次安装都会编译最新的代码，更新 mango 之后建议先检查一下配置：
+
+```bash
+mango -c ~/.config/mango/config.conf -p   # 只检查，不启动；有错误时会列出行号
+```
 
 ## 日常使用
 

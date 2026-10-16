@@ -1,5 +1,5 @@
 #!/bin/bash
-# 切换壁纸（turn 11）
+# 切换壁纸
 # 用法：wallpaper.sh next     切到下一张
 #       wallpaper.sh prev     切到上一张
 #       wallpaper.sh restore  启动壁纸程序，显示上次用的那张（mango 启动时用）
@@ -9,7 +9,7 @@
 #
 # 平时用 wallpaperd（~/.config/mango/wallpaperd/）显示壁纸：它启动时就把所有壁纸准备好，
 # next / prev 只是给它发一个信号，几乎没有延迟。
-# wallpaperd 没有编译好时，退回到旧的做法（每次重新启动 swaybg，有 0.3 秒左右的延迟）。
+# wallpaperd 没有编译好时，退回到备用的做法（每次重新启动 swaybg，有 0.3 秒左右的延迟）。
 
 WPD="$HOME/.config/mango/wallpaperd/wallpaperd"
 PIDFILE="${XDG_RUNTIME_DIR:-/tmp}/mango-wallpaperd-${WAYLAND_DISPLAY:-wayland-0}.pid"
@@ -39,7 +39,7 @@ if [ -x "$WPD" ]; then
             ;;
         *)  # restore
             daemon_pid >/dev/null && exit 0
-            old=$(session_pids swaybg)       # 从旧方式切换过来时，关掉 swaybg
+            old=$(session_pids swaybg)       # 之前用 swaybg 显示时，关掉它
             setsid "$WPD" >/dev/null 2>&1 < /dev/null &
             if [ -n "$old" ]; then
                 sleep 1
@@ -50,7 +50,7 @@ if [ -x "$WPD" ]; then
     exit 0
 fi
 
-# ---------- 以下是 wallpaperd 不可用时的旧做法（swaybg） ----------
+# ---------- 以下是 wallpaperd 不可用时的备用做法（swaybg） ----------
 
 DIR="$HOME/Pictures/background"
 STATE="${WALLPAPER_STATE:-$HOME/.cache/mango-wallpaper}"

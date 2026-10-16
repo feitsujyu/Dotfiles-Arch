@@ -1,5 +1,5 @@
 #!/bin/bash
-# 音量弹窗的开关（turn 34）：waybar 的音量模块的 on-click 调用这个脚本
+# 音量弹窗的开关：waybar 的音量模块的 on-click 调用这个脚本
 # 常驻的 volume-popup.py 在运行 → 发信号让它显示 / 隐藏；没在运行 → 启动它并显示
 PIDFILE="${XDG_RUNTIME_DIR:-/tmp}/volume-popup-${WAYLAND_DISPLAY:-wayland-0}.pid"
 pid=$(cat "$PIDFILE" 2>/dev/null)

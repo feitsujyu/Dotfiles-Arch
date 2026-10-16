@@ -1,4 +1,4 @@
-# 弹窗位置的计算（turn 46）：wifi-popup.py / volume-popup.py / bluetooth-popup.py 共用
+# 弹窗位置的计算：wifi-popup.py / volume-popup.py / bluetooth-popup.py / brightness-popup.py 共用
 #
 # 点击 waybar 的模块打开弹窗时，查一下“现在”这个模块在哪里，让弹窗的右边对准模块的右边。
 # （模块的位置会随右边模块的文字宽度变化，例如电池 100% ⇄ 99%，所以不能写死）
@@ -6,7 +6,7 @@
 # 1. mmsg get cursorpos  → 鼠标的位置和所在的屏幕（点击时鼠标就在模块上）
 # 2. mmsg get monitor    → 这块屏幕的位置、大小、缩放
 # 3. barprobe（~/.config/waybar/barprobe，C 写的小工具）→ 截取栏中间的 1 行像素，找出鼠标所在模块的左右边界
-# 合计约 20～25ms。任何一步失败（鼠标不在栏上、mmsg 不能用等）时返回 None，弹窗用原来的固定位置。
+# 合计约 20～25ms。任何一步失败（鼠标不在栏上、mmsg 不能用等）时返回 None，弹窗用固定的位置（MARGIN_RIGHT）。
 
 import json
 import os

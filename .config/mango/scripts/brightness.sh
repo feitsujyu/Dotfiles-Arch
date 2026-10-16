@@ -1,5 +1,5 @@
 #!/bin/bash
-# 屏幕亮度（turn 48）：mango 的亮度键（Fn + F11/F12）调用这个脚本
+# 屏幕亮度：mango 的亮度键（Fn + F11/F12）调用这个脚本
 #
 # 用法：brightness.sh up | down | set <百分比>
 #   up / down：每次 ±STEP%，最低 MIN%（防止屏幕完全变黑看不见）

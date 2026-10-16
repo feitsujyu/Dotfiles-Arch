@@ -1,8 +1,8 @@
 #!/bin/bash
-# fcitx5 输入框的字体大小 ← kitty 的字体大小（turn 52）
+# fcitx5 输入框的字体大小 ← kitty 的字体大小
 #
 # 用法：fcitx5-font-sync.sh          同步一次
-#       fcitx5-font-sync.sh --watch  同步一次，然后监视 kitty.conf，改了之后自动再同步（mango 的 exec-once 用）
+#       fcitx5-font-sync.sh --watch  同步一次，然后监视 kitty.conf，改了之后自动再同步（mango 的 exec_once 用）
 #
 # 做法：读 ~/.config/kitty/kitty.conf 的 font_size，改写 ~/.config/fcitx5/conf/classicui.conf 的
 #       Font= / MenuFont=，然后通过 DBus 让 fcitx5 重新加载经典界面（不用重启 fcitx5）
@@ -31,7 +31,7 @@ sync_once() {
 
 sync_once
 if [ "$1" = "--watch" ]; then
-    # 已经有一个在监视时不再启动（重复执行 exec-once 等）
+    # 已经有一个在监视时不再启动（重复执行 exec_once 等）
     exec 9> "${XDG_RUNTIME_DIR:-/tmp}/fcitx5-font-sync.lock"
     flock -n 9 || exit 0
     # 编辑器保存时常常是“写到新文件再改名”，所以监视目录，而不是 kitty.conf 本身

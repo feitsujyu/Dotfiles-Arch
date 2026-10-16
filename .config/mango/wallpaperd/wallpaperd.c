@@ -1,4 +1,4 @@
-// wallpaperd —— 预加载式壁纸程序（turn 11 追加），替代 swaybg
+// wallpaperd —— 预加载式壁纸程序，替代 swaybg
 //
 // swaybg 不能在运行中更换图片，每次切换都要“启动新进程 → 解码 4K PNG → 缩放 → 显示”（实测 300～400 ms）。
 // 这个程序在启动时就把每张壁纸按“每块屏幕的实际像素尺寸”准备好（wallpaper-cache.py 生成的原始像素文件），

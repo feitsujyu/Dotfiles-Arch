@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-# Wi-Fi 选择菜单（turn 22）：点击 waybar 的 Wi-Fi 模块时弹出
+# Wi-Fi 选择菜单：点击 waybar 的 Wi-Fi 模块时弹出
 #
 # 用到的都是已经装好的程序：
 #   nmcli（NetworkManager 自带）  扫描 / 连接 / 断开 / 开关 Wi-Fi
-#   rofi（turn 10 已配置 Lilac 主题） 显示列表、输入密码、显示提示
+#   rofi 显示列表、输入密码、显示提示
 #
 # 操作：
 #   选择网络       → 已保存过的直接连接；新的加密网络会弹出密码框（输入内容显示为 *）

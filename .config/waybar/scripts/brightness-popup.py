@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-# 亮度弹窗（turn 48）：点击 waybar 的亮度模块时，从模块上方淡入显示
+# 亮度弹窗：点击 waybar 的亮度模块时，从模块上方淡入显示
 #
-# 做法和音量弹窗（volume-popup.py，turn 34）相同：
+# 做法和音量弹窗（volume-popup.py）相同：
 # · 常驻后台（平时隐藏），收到 SIGUSR1 时 显示 ⇄ 隐藏（由 brightness-popup-toggle.sh 发送）
 # · gtk-layer-shell 的图层，图层名 “brightness-menu”；淡入淡出 FADE_MS（0.2 秒）由程序自己做，
-#   mango 那边对这个图层设置 noanim:1
+#   mango 那边对这个图层设置 no_animation:1
 # · 点击外面自动关闭（后面铺一层完全透明的全屏图层 “brightness-menu-catcher”）
-# · 打开时查一下模块现在的位置，弹窗的右边对准模块的右边（popup_anchor.py，turn 46）
+# · 打开时查一下模块现在的位置，弹窗的右边对准模块的右边（popup_anchor.py）
 #
 # 画面：亮度滑块 + 百分比、常用亮度的按钮（25 / 50 / 75 / 100%）
 #
@@ -29,7 +29,7 @@ gi.require_version("GLibUnix", "2.0")
 gi.require_version("GtkLayerShell", "0.1")
 from gi.repository import Gdk, Gio, GLib, GLibUnix, Gtk, GtkLayerShell  # noqa: E402
 
-# turn 46：弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
+# 弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
 sys.dont_write_bytecode = True  # 不在 scripts 目录里生成 __pycache__
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import popup_anchor  # noqa: E402
@@ -276,7 +276,7 @@ class BrightnessPopup:
         return win
 
     def place(self):
-        """turn 46：查一下“现在”模块在哪里，弹窗的右边对准模块的右边，显示在点击的那块屏幕上
+        """查一下“现在”模块在哪里，弹窗的右边对准模块的右边，显示在点击的那块屏幕上
         （查不到时保持上一次的位置，第一次是 MARGIN_RIGHT）"""
         pos = popup_anchor.locate()
         if pos is None:
@@ -354,7 +354,7 @@ def main():
         f.write(str(os.getpid()))
 
     popup = BrightnessPopup()
-    # 不能在信号的回调里直接显示窗口（会卡在 gtk-layer-shell 显示图层的地方，turn 30），所以交给 idle
+    # 不能在信号的回调里直接显示窗口（会卡在 gtk-layer-shell 显示图层的地方），所以交给 idle
     GLibUnix.signal_add(GLib.PRIORITY_HIGH, signal.SIGUSR1,
                         lambda: (GLib.idle_add(popup.toggle), True)[1])
     GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, lambda: (Gtk.main_quit(), False)[1])

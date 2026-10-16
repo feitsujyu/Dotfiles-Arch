@@ -10,5 +10,5 @@ alias grep='grep --color=auto'
 PS1='[\u@\h \W]\$ '
 export PATH="$HOME/.local/bin:$PATH"
 
-# dotfiles（turn 69）：bare 仓库 ~/.dotfiles，工作目录是家目录。用法和 git 一样：dotfiles status / add / commit / push
+# dotfiles：bare 仓库 ~/.dotfiles，工作目录是家目录。用法和 git 一样：dotfiles status / add / commit / push
 alias dotfiles='git --git-dir=$HOME/.dotfiles --work-tree=$HOME'

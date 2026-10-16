@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-# Wi-Fi 弹窗（turn 30，turn 23 的方案 D）：点击 waybar 的 Wi-Fi 模块时，从模块上方淡入显示
+# Wi-Fi 弹窗：点击 waybar 的 Wi-Fi 模块时，从模块上方淡入显示
 #
 # · 常驻后台（平时隐藏），收到 SIGUSR1 时 显示 ⇄ 隐藏（由 wifi-popup-toggle.sh 发送），所以点击后马上出现
-# · 用 gtk-layer-shell 显示成图层，图层名 “wifi-menu”（mango 的 layerrule 可以单独设置它）
-# · 淡入 / 淡出由程序自己做，时间 FADE_MS（0.2 秒）；mango 那边对这个图层设置 noanim:1（不再叠加动画）
+# · 用 gtk-layer-shell 显示成图层，图层名 “wifi-menu”（mango 的 layer_rule 可以单独设置它）
+# · 淡入 / 淡出由程序自己做，时间 FADE_MS（0.2 秒）；mango 那边对这个图层设置 no_animation:1（不再叠加动画）
 #   （mango 的动画时间是所有窗口共用的设置，没法只给这个弹窗设成 0.2 秒，所以由程序自己做）
 # · 点击弹窗外面自动关闭：显示时在弹窗后面铺一层完全透明的全屏图层（“wifi-menu-catcher”），点到它就关闭
 # · 实际的扫描 / 连接 / 保存密码沿用 wifi-menu.py（rofi 版）里的 nmcli 处理；密码不会出现在命令行参数里
@@ -26,17 +26,17 @@ gi.require_version("GLibUnix", "2.0")
 gi.require_version("GtkLayerShell", "0.1")
 from gi.repository import Gdk, GLib, GLibUnix, Gtk, GtkLayerShell, Pango  # noqa: E402
 
-# turn 46：弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
+# 弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
 sys.dont_write_bytecode = True  # 不在 scripts 目录里生成 __pycache__
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import popup_anchor  # noqa: E402
 
 # ---------- 设置 ----------
-MODE = "layer"          # "layer"：图层（现在用的）  "window"：普通窗口（turn 29；需要 mango 的 windowrule，见文件末尾）
+MODE = "layer"          # "layer"：图层（现在用的）  "window"：普通窗口
 FADE_MS = 200           # 淡入 / 淡出的时间（毫秒）
 WIDTH = 420             # 弹窗宽度
 MARGIN_RIGHT = 255      # 离屏幕右边的距离（对准 Wi-Fi 模块）
-#   turn 46 起：每次打开时查模块的实际位置（place），这个值只在查不到时使用
+#   每次打开时会查模块的实际位置（place），这个值只在查不到时使用
 MARGIN_BOTTOM = 8       # 离 waybar 的距离
 LIST_MAX_HEIGHT = 330   # 列表最多显示的高度（超过时可以滚动）
 REFRESH_SEC = 5         # 打开期间自动刷新列表的间隔
@@ -76,7 +76,7 @@ entry {
 entry selection { background-color: #c8b8f8; color: #1f1a3d; }
 scrolledwindow, viewport, list { background-color: transparent; border: none; }
 /* transition: none —— 系统 GTK 主题（Adwaita）给行的背景色加了 150ms 的过渡动画，
-   列表重建时选中行会先变暗再变回粉色，看起来像闪了一下（turn 31），所以关掉 */
+   列表重建时选中行会先变暗再变回粉色，看起来像闪了一下，所以关掉 */
 row { padding: 5px 10px; border-radius: 8px; background-color: transparent; outline: none; transition: none; }
 row:hover { background-color: rgba(58, 52, 112, 0.85); }
 row:selected, row:selected:hover { background-color: #f5a0c8; }
@@ -247,11 +247,11 @@ class NetRow(Gtk.ListBoxRow):
     def activate_row(self):
         if self.popup.busy:
             return
-        # turn 32：再点一次已经展开的网络 → 收起
+        # 再点一次已经展开的网络 → 收起
         if self.expanded():
             self.collapse()
             return
-        # turn 32：点了别的网络 → 之前展开的（没有连接的）都收起来
+        # 点了别的网络 → 之前展开的（没有连接的）都收起来
         self.popup.collapse_others(self)
         if self.in_use:  # 已连接：显示“断开连接”
             self.pw_box.hide()
@@ -383,7 +383,7 @@ class WifiPopup:
                 GtkLayerShell.set_margin(win, GtkLayerShell.Edge.RIGHT, MARGIN_RIGHT)
                 GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.EXCLUSIVE)
         else:
-            # 普通窗口（turn 29）：位置 / 浮动由 mango 的 windowrule 决定；失去焦点 = 点了外面 → 关闭
+            # 普通窗口：位置 / 浮动由 mango 的 window_rule 决定；失去焦点 = 点了外面 → 关闭
             win.set_title("Wi-Fi")
             win.set_decorated(False)
             win.connect("focus-out-event", lambda *_: self.hide())
@@ -399,7 +399,7 @@ class WifiPopup:
         return True
 
     def place(self):
-        """turn 46：查一下“现在”模块在哪里，弹窗的右边对准模块的右边，显示在点击的那块屏幕上
+        """查一下“现在”模块在哪里，弹窗的右边对准模块的右边，显示在点击的那块屏幕上
         （约 20～25ms；查不到时保持上一次的位置，第一次是 MARGIN_RIGHT）"""
         pos = popup_anchor.locate()
         if pos is None:
@@ -503,7 +503,7 @@ class WifiPopup:
         self.switch.handler_unblock(self.switch_handler)
         rows = self.listbox.get_children()
         if [r.key() for r in rows] == [(ssid, in_use, sec) for in_use, sig, sec, ssid in nets]:
-            # 网络和顺序都没变：只更新信号强度的图标，不重建列表（turn 31：避免选中行闪烁）
+            # 网络和顺序都没变：只更新信号强度的图标，不重建列表
             for r, (in_use, sig, sec, ssid) in zip(rows, nets):
                 if r.sig != sig:
                     r.set_signal(sig)
@@ -624,7 +624,7 @@ def main():
         f.write(str(os.getpid()))
 
     if MODE == "window":
-        GLib.set_prgname(NAMESPACE)  # 普通窗口的 app_id（mango 的 windowrule 用它识别）；必须在建立窗口之前设置
+        GLib.set_prgname(NAMESPACE)  # 普通窗口的 app_id（mango 的 window_rule 用它识别）；必须在建立窗口之前设置
     popup = WifiPopup()
     # 注意：不能在信号的回调里直接显示窗口（实测会卡在 gtk-layer-shell 显示图层的地方），
     #       所以收到信号后交给 idle（主循环空闲时）再执行
@@ -647,7 +647,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-# ---------- MODE = "window"（普通窗口）时需要在 mango 的 config.conf 里加的规则（turn 29） ----------
-# windowrule=appid:^wifi-menu$,isfloating:1,offsetx:100,offsety:100,width:428,height:460,isnoborder:1,animation_type_open:zoom,animation_type_close:zoom
+# ---------- MODE = "window"（普通窗口）时需要在 mango 的 config.conf 里加的规则 ----------
+# window_rule=app_id:^wifi-menu$,is_floating:1,offset_x:100,offset_y:100,width:428,height:460,no_border:1,animation_type_open:zoom,animation_type_close:zoom
 # 注意：普通窗口的位置是 mango 按“刚出现时的大小”计算的，之后窗口变高会超出屏幕下边，
 #       所以要用 height 把高度固定下来（列表行数少时，下面会留出空白）。图层模式没有这个问题。

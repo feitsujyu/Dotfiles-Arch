@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-# 蓝牙弹窗（turn 41）：点击 waybar 的蓝牙模块时，从模块上方淡入显示
+# 蓝牙弹窗：点击 waybar 的蓝牙模块时，从模块上方淡入显示
 #
-# 做法和 Wi-Fi 弹窗（wifi-popup.py，turn 30）、音量弹窗（volume-popup.py，turn 34）相同：
+# 做法和 Wi-Fi 弹窗（wifi-popup.py）、音量弹窗（volume-popup.py）相同：
 # · 常驻后台（平时隐藏），收到 SIGUSR1 时 显示 ⇄ 隐藏（由 bluetooth-popup-toggle.sh 发送）
 # · gtk-layer-shell 的图层，图层名 “bluetooth-menu”；淡入淡出 FADE_MS（0.2 秒）由程序自己做，
-#   mango 那边对这个图层设置 noanim:1
+#   mango 那边对这个图层设置 no_animation:1
 # · 点击外面自动关闭（后面铺一层完全透明的全屏图层 “bluetooth-menu-catcher”）
 #
 # 画面：
@@ -31,7 +31,7 @@ gi.require_version("GLibUnix", "2.0")
 gi.require_version("GtkLayerShell", "0.1")
 from gi.repository import Gdk, Gio, GLib, GLibUnix, Gtk, GtkLayerShell, Pango  # noqa: E402
 
-# turn 46：弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
+# 弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
 sys.dont_write_bytecode = True  # 不在 scripts 目录里生成 __pycache__
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import popup_anchor  # noqa: E402
@@ -39,8 +39,8 @@ import popup_anchor  # noqa: E402
 # ---------- 设置 ----------
 FADE_MS = 200           # 淡入 / 淡出的时间（毫秒）
 WIDTH = 400             # 弹窗宽度
-MARGIN_RIGHT = 325      # 离屏幕右边的距离（弹窗右边对准 waybar 的蓝牙模块的右边；turn 41：454，turn 42：321，turn 44 换字体后改）
-#   turn 46 起：每次打开时查模块的实际位置（place），这个值只在查不到时使用
+MARGIN_RIGHT = 325      # 离屏幕右边的距离（弹窗右边对准 waybar 的蓝牙模块的右边）
+#   每次打开时会查模块的实际位置（place），这个值只在查不到时使用
 MARGIN_BOTTOM = 8       # 离 waybar 的距离
 MAX_LIST_HEIGHT = 420   # 设备列表最多显示多高（超过时出现滚动条）
 MAX_NEARBY = 15         # “附近的设备”最多显示几个（按信号强弱）
@@ -91,7 +91,7 @@ entry {
     caret-color: #f5a0c8; min-height: 0;
 }
 scrolledwindow, viewport, list { background-color: transparent; border: none; }
-/* transition: none —— 关掉系统主题（Adwaita）给按钮、行加的过渡动画（和 Wi-Fi 弹窗的 turn 31 一样） */
+/* transition: none —— 关掉系统主题（Adwaita）给按钮、行加的过渡动画（和 Wi-Fi 弹窗一样） */
 row { padding: 5px 10px; border-radius: 8px; background-color: transparent; outline: none; transition: none; }
 row:hover { background-color: rgba(58, 52, 112, 0.85); }
 row:selected, row:selected:hover { background-color: transparent; }
@@ -290,7 +290,7 @@ class DeviceRow(Gtk.ListBoxRow):
             self.set_expanded(True)
             self.popup.pair(self.path)
             return
-        # 已配对的设备：展开 / 收起（和 Wi-Fi 弹窗的 turn 32 一样，展开别的行时之前的收起来）
+        # 已配对的设备：展开 / 收起（和 Wi-Fi 弹窗一样，展开别的行时之前的收起来）
         if self.expanded():
             self.set_expanded(False)
             return
@@ -707,7 +707,7 @@ class BluetoothPopup:
         return False
 
     def place(self):
-        """turn 46：查一下“现在”模块在哪里，弹窗的右边对准模块的右边，显示在点击的那块屏幕上
+        """查一下“现在”模块在哪里，弹窗的右边对准模块的右边，显示在点击的那块屏幕上
         （约 20～25ms；查不到时保持上一次的位置，第一次是 MARGIN_RIGHT）"""
         pos = popup_anchor.locate()
         if pos is None:
@@ -798,7 +798,7 @@ def main():
         f.write(str(os.getpid()))
 
     popup = BluetoothPopup()
-    # 不能在信号的回调里直接显示窗口（会卡在 gtk-layer-shell 显示图层的地方，turn 30），所以交给 idle
+    # 不能在信号的回调里直接显示窗口（会卡在 gtk-layer-shell 显示图层的地方），所以交给 idle
     GLibUnix.signal_add(GLib.PRIORITY_HIGH, signal.SIGUSR1,
                         lambda: (GLib.idle_add(popup.toggle), True)[1])
     GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, lambda: (Gtk.main_quit(), False)[1])

@@ -1,5 +1,5 @@
 /*
- * barprobe（turn 46）：找出 waybar 上鼠标所在的模块（胶囊）的左右边界
+ * barprobe：找出 waybar 上鼠标所在的模块（胶囊）的左右边界
  *
  * 用法：barprobe <屏幕名> <宽> <缩放> <y> <x>
  *   屏幕名：eDP-1 等（mmsg get cursorpos 的 monitor）

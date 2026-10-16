@@ -12,9 +12,8 @@
 # Time limit in milliseconds for triggering modifier key shortcuts
 # ModifierOnlyKeyTimeout=250
 
-# turn 13：英文 ⇄ 虎码 的切换改为 Ctrl+Shift
+# 英文 ⇄ 虎码 的切换：Ctrl+Shift
 #   先按 Ctrl 再按 Shift、先按 Shift 再按 Ctrl 都可以，左右两边的键都可以
-#   原设定（fcitx5 默认）：0=Control+space  1=Zenkaku_Hankaku  2=Hangul
 [Hotkey/TriggerKeys]
 0=Control+Shift_L
 1=Control+Shift_R

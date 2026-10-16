@@ -1,5 +1,5 @@
 #!/bin/bash
-# barprobe 的编译（turn 46）：只用系统里已有的 gcc / wayland-scanner / wayland-client
+# barprobe 的编译：只用系统里已有的 gcc / wayland-scanner / wayland-client
 set -e
 cd "$(dirname "$0")"
 mkdir -p build

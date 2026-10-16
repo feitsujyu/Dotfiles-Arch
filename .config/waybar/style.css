@@ -6,10 +6,9 @@
 @define-color ink        #1f1a3d; /* 深靛紫：栏底色（= kitty background） */
 @define-color surface    #3a3470; /* 胶囊底色 */
 @define-color text       #c9b9f2; /* 主文字：淡紫（= kitty foreground） */
-/* @define-color text       #d6ccf6; */ /* 更亮、偏白的原设定，觉得太暗时可改回 */
 @define-color muted      #9a8cc8; /* 次要文字 / 非激活工作区 */
-@define-color accent     #6c5cc4; /* 强调色（= mango 未聚焦边框 bordercolor） */
-@define-color focus      #f5a0c8; /* 当前工作区 / 时钟（= mango focuscolor = kitty 光标） */
+@define-color accent     #6c5cc4; /* 强调色（= mango 未聚焦边框 border_color） */
+@define-color focus      #f5a0c8; /* 当前工作区 / 时钟（= mango focus_color = kitty 光标） */
 @define-color lavender   #a898e8;
 @define-color pink       #f5a0c8;
 @define-color white      #fbfaff;
@@ -19,10 +18,9 @@
 @define-color charging   #8fd4a8;
 
 * {
-    /* turn 44：改用 Propo 版。图标按自己实际的宽度占位置，不会盖到右边的空格上
-       （非 Propo 版里图标只占 1 个字的宽度，Wi-Fi 等较宽的图标会和数字挤在一起，turn 43） */
+    /* 用 Propo 版：图标按自己实际的宽度占位置，不会盖到右边的空格上
+       （非 Propo 版里图标只占 1 个字的宽度，Wi-Fi 等较宽的图标会和数字挤在一起） */
     font-family: "JetBrainsMono Nerd Font Propo", "Noto Sans CJK SC";
-    /* font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK SC"; */ /* turn 43 之前 */
     font-size: 14px;
     border: none;
     border-radius: 0;
@@ -30,11 +28,8 @@
 }
 
 window#waybar {
-    /* turn 5：比 kitty（0.85）更不透明，和窗口区分开 */
+    /* 比 kitty（0.85）更不透明，和窗口区分开 */
     background-color: alpha(@ink, 0.97);
-    /* background-color: alpha(@ink, 0.92); */ /* turn 5 试过 */
-    /* background-color: alpha(@ink, 1.0); */ /* turn 5 试过：完全不透明 */
-    /* background-color: alpha(@ink, 0.88); */ /* turn 2～4 */
     border-top: 2px solid alpha(@accent, 0.6); /* 栏在下方，分隔线放在上边 */
     color: @text;
 }
@@ -97,7 +92,7 @@ tooltip label {
     border-radius: 8px;
 }
 
-/* ---------- 聚焦窗口标题（custom/focused-window，turn 6） ---------- */
+/* ---------- 聚焦窗口标题（custom/focused-window） ---------- */
 
 #custom-focused-window {
     padding: 0 10px;
@@ -127,7 +122,7 @@ tooltip label {
     font-weight: bold;
 }
 
-/* 系统托盘（turn 12） */
+/* 系统托盘 */
 #tray {
     padding: 0 6px;
 }
@@ -152,7 +147,7 @@ tooltip label {
     color: @muted;
 }
 
-/* 蓝牙关闭时（turn 41）：图标用次要文字的颜色 */
+/* 蓝牙关闭时：图标用次要文字的颜色 */
 #bluetooth.off,
 #bluetooth.disabled {
     color: @muted;
