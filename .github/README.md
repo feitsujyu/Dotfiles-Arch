@@ -42,7 +42,7 @@ dotfiles checkout
 
 ```bash
 # 桌面（mangowm-git 在 AUR）
-mangowm-git waybar kitty rofi swaybg
+mangowm-git waybar kitty rofi
 # 弹窗脚本
 python-gobject gtk3 gtk-layer-shell
 # 网络 / 蓝牙 / 声音 / 电源
@@ -53,6 +53,8 @@ fcitx5 fcitx5-chinese-addons fcitx5-gtk fcitx5-qt fcitx5-configtool fcitx5-lua i
 ttf-jetbrains-mono-nerd noto-fonts noto-fonts-cjk noto-fonts-emoji
 # 编译 wallpaperd / barprobe
 base-devel wayland wayland-protocols
+# 可选（不是必需的）：只在 wallpaperd 还没编译或编译失败时，wallpaper.sh 才改用 swaybg 显示壁纸
+swaybg
 ```
 
 ### 2. 编译两个小程序
