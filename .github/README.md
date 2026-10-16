@@ -4,7 +4,8 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 
 | 程序 | 文件 | 内容 |
 |---|---|---|
-| mango | `.config/mango/config.conf` | 快捷键、动画、窗口规则、触控/手写笔绑定到笔记本屏幕、开机启动 |
+| mango | `.config/mango/config.conf` | 快捷键、动画、窗口规则、开机启动 |
+| | `.config/mango/local.conf.example` | 每台电脑自己的设置（屏幕的缩放和位置、触屏绑定到哪块屏幕）的样本 |
 | | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty |
 | | `.config/mango/wallpaperd/` | 预先准备好壁纸、切换时不卡顿的壁纸程序（C，需要编译） |
 | waybar | `.config/waybar/config.jsonc`, `style.css` | 底部状态栏 |
@@ -68,13 +69,29 @@ swaybg
 ~/.config/waybar/barprobe/build.sh
 ```
 
-### 3. 仓库里没有的东西
+### 3. 这台电脑自己的屏幕 / 触屏设置
+
+屏幕的名字、分辨率、触屏的型号每台电脑都不一样，所以写在不放进仓库的 `~/.config/mango/local.conf` 里：
+
+```bash
+cp ~/.config/mango/local.conf.example ~/.config/mango/local.conf
+```
+
+然后按样本里的说明修改：
+
+- 屏幕名：`mmsg get all-monitors`
+- 触屏的设备名：`grep -i 'Name=' /proc/bus/input/devices`
+- 并排的屏幕：右边屏幕的 `x` = 左边屏幕缩放后的宽度（分辨率的宽 ÷ scale）。写大了中间会空出一段，鼠标过不去。
+
+没有 `local.conf` 也能用：所有屏幕都是 100%，自动从左往右排列。
+
+### 4. 仓库里没有的东西
 
 - **虎码码表**：从虎码官方获取 fcitx5 版码表，放到 `~/.local/share/fcitx5/table/tiger.main.dict`。
 - **虎码图标**：放到 `~/.local/share/icons/input_icon_tiger-code.png`（`tiger.conf` 里写的是绝对路径 `/home/feitsujyu/...`，用户名不同时要改）。
 - **壁纸**：png / jpg 放到 `~/Pictures/background/`，按文件名顺序切换（`Super+W` / `Super+Shift+W`）。
 
-### 4. 重新登录 mango
+### 5. 重新登录 mango
 
 waybar、fcitx5、壁纸等都由 mango 的 `exec_once` 启动。
 

@@ -20,3 +20,6 @@ __pycache__/
 
 # fcitx5 自动生成的缓存
 .config/fcitx5/conf/cached_layouts
+
+# 每台电脑自己的 mango 设置（屏幕、触屏）；样本是 .config/mango/local.conf.example
+.config/mango/local.conf
