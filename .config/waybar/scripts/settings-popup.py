@@ -12,7 +12,7 @@
 # · 第一层：设置的分类，每个分类一行（右边是现在设定的摘要）；点一下进入这个分类的第二层
 # · 第二层：这个分类的设置。标题栏左边的 ‹ 或 Esc 回到第一层
 # 分类：
-# · 显示器：每块连接着的屏幕的缩放比例；外接屏放在内置屏的哪一边
+# · 显示器：每块连接着的屏幕的缩放比例；外接屏放在内置屏的哪一边、怎么对齐
 # · 电源模式：性能 / 平衡 / 节能（power-profiles-daemon，通过 DBus 切换，不需要 root）
 #   以后要加别的分类时，写“建第二层画面”和“摘要”两个函数，加到 SettingsPopup.categories 里
 #
@@ -51,6 +51,11 @@ MARGIN_RIGHT = 6        # 离屏幕右边的距离（只在查不到模块位置
 MARGIN_BOTTOM = 8       # 离 waybar 的距离
 SCALES = (1.0, 1.25, 1.5, 1.75, 2.0)
 POSITIONS = (("right", "右边"), ("left", "左边"), ("above", "上边"), ("below", "下边"))
+# 对齐方式：外接屏在左右时是上下方向的对齐，在上下时是左右方向的对齐（默认居中）
+ALIGNS = {
+    "side": (("start", "上对齐"), ("center", "居中"), ("end", "下对齐")),   # 在右边 / 左边
+    "stack": (("start", "左对齐"), ("center", "居中"), ("end", "右对齐")),  # 在上边 / 下边
+}
 # 两层之间切换的动画时间（毫秒）
 SLIDE_MS = 150          # 滑动：内容向左 / 向右滑、返回按钮“‹”展开 / 收起
 RESIZE_MS = 250         # 伸展：弹窗的高度、粉色标题后面的“ › 分类名”
@@ -155,7 +160,7 @@ POS_RE = re.compile(r"^# 位置：(\S+)=(\S+)$")
 
 
 def read_local():
-    """local.conf → ({屏幕名: 缩放}, {屏幕名: 位置}, 其余的行)"""
+    """local.conf → ({屏幕名: 缩放}, {屏幕名: (位置, 对齐)}, 其余的行)"""
     try:
         lines = open(LOCAL_CONF).read().splitlines()
     except OSError:
@@ -179,7 +184,8 @@ def read_local():
             continue
         p = POS_RE.match(line)
         if inside and p:
-            positions[p.group(1)] = p.group(2)
+            where, _, align = p.group(2).partition(",")
+            positions[p.group(1)] = (where, align or "center")
             continue
         if not inside:
             rest.append(line)
@@ -191,7 +197,8 @@ def read_local():
 def layout(monitors, scales, positions):
     """连接着的屏幕的位置 {屏幕名: (x, y)}
     内置屏（没有的话是第一块）放在 (0,0)，其他屏幕按记住的位置（右边 / 左边 / 上边 / 下边）紧挨着排，
-    最后整体平移，让左上角是 (0,0)。对齐的方式：左右排列时上边对齐，上下排列时左右居中。"""
+    最后整体平移，让左上角是 (0,0)。
+    对齐（和内置屏比）：左右排列时 上对齐 / 居中 / 下对齐，上下排列时 左对齐 / 居中 / 右对齐。"""
     if not monitors:
         return {}
     ordered = sorted(monitors, key=lambda m: (not is_internal(m["name"]), m["name"]))
@@ -207,18 +214,21 @@ def layout(monitors, scales, positions):
     for m in ordered[1:]:
         n = m["name"]
         w, h = size[n]
-        where = positions.get(n, "right")
+        where, align = positions.get(n, ("right", "center"))
+        # 和内置屏对齐：start = 上 / 左，center = 居中，end = 下 / 右
+        ay = {"start": 0, "end": fh - h}.get(align, (fh - h) // 2)
+        ax = {"start": 0, "end": fw - w}.get(align, (fw - w) // 2)
         if where == "left":
-            pos[n] = (left - w, 0)
+            pos[n] = (left - w, ay)
             left -= w
         elif where == "above":
-            pos[n] = ((fw - w) // 2, top - h)
+            pos[n] = (ax, top - h)
             top -= h
         elif where == "below":
-            pos[n] = ((fw - w) // 2, bottom)
+            pos[n] = (ax, bottom)
             bottom += h
         else:
-            pos[n] = (right, 0)
+            pos[n] = (right, ay)
             right += w
     minx = min(x for x, _ in pos.values())
     miny = min(y for _, y in pos.values())
@@ -241,7 +251,7 @@ def render_local(monitors, scales, positions, rest):
             line += f",x:{pos[n][0]},y:{pos[n][1]}"
         out.append(line)
     for n in sorted(positions):
-        out.append(f"# 位置：{n}={positions[n]}")
+        out.append(f"# 位置：{n}={positions[n][0]},{positions[n][1]}")
     out.append(MARK_END)
     return "\n".join(out) + "\n"
 
@@ -445,10 +455,13 @@ class SettingsPopup:
             card.pack_start(self.button_row("缩放", [(s, fmt_scale(s)) for s in SCALES], cur,
                                             lambda v, n=n: self.set_scale(n, v)), False, False, 0)
             if n != first and len(ordered) > 1:
-                where = positions.get(n, "right")
+                where, align = positions.get(n, ("right", "center"))
                 label = f"在 {first} 的"
                 card.pack_start(self.button_row(label, POSITIONS, where,
                                                 lambda v, n=n: self.set_position(n, v)), False, False, 0)
+                aligns = ALIGNS["side" if where in ("right", "left") else "stack"]
+                card.pack_start(self.button_row("对齐", aligns, align,
+                                                lambda v, n=n: self.set_align(n, v)), False, False, 0)
             box.pack_start(card, False, False, 0)
 
     def button_row(self, key, items, current, on_click):
@@ -535,7 +548,14 @@ class SettingsPopup:
         scales, positions, rest = read_local()
         for m in self.monitors:
             scales.setdefault(m["name"], m.get("scale", 1.0))
-        positions[name] = value
+        positions[name] = (value, positions.get(name, ("right", "center"))[1])
+        self.apply(scales, positions, rest)
+
+    def set_align(self, name, value):
+        scales, positions, rest = read_local()
+        for m in self.monitors:
+            scales.setdefault(m["name"], m.get("scale", 1.0))
+        positions[name] = (positions.get(name, ("right", "center"))[0], value)
         self.apply(scales, positions, rest)
 
     def apply(self, scales, positions, rest):
