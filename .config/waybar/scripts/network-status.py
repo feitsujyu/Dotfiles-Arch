@@ -5,7 +5,7 @@
 #   无线：󰤨 867M   —— 现在的连接速率（NetworkManager 提供，随信号变化），图标的格数表示信号强度
 #   未连接：󰤮 Disconnected
 #
-# 鼠标悬停的提示里显示实时的下载 / 上传速度（每 SPEED_INTERVAL 秒计算一次，
+# 鼠标悬停的提示里显示实时的上传 / 下载速度（每 SPEED_INTERVAL 秒计算一次，
 # 用 /sys/class/net/<网卡>/statistics/ 里收发的字节数之差算出）
 #
 # 一直运行，每次内容变化时输出一行 JSON（waybar 的 return-type: json）：
@@ -47,9 +47,9 @@ def rate_text(mbps):
 
 
 def device_info(dev):
-    """IP 地址、网关、连接速率（nmcli 显示的 Mb/s）"""
+    """IP 地址、连接速率（nmcli 显示的 Mb/s）"""
     info = {}
-    for line in nmcli("-f", "IP4.ADDRESS,IP4.GATEWAY,CAPABILITIES.SPEED", "dev", "show", dev).splitlines():
+    for line in nmcli("-f", "IP4.ADDRESS,CAPABILITIES.SPEED", "dev", "show", dev).splitlines():
         key, _, value = line.partition(":")
         info.setdefault(key.split("[")[0], value)
     speed = info.get("CAPABILITIES.SPEED", "").split()
@@ -102,8 +102,7 @@ def status():
         info = device_info(dev)
         mbps = wired_mbps(dev) or info["mbps"]
         text = "󰈀 " + rate_text(mbps) if mbps else "󰈀"
-        tooltip = (f"有线：{dev}\nIP：{info.get('IP4.ADDRESS', '')}\n"
-                   f"网关：{info.get('IP4.GATEWAY', '')}")
+        tooltip = f"有线：{dev}\nIP：{info.get('IP4.ADDRESS', '')}"
         return {"text": text, "tooltip": tooltip, "class": "ethernet", "dev": dev}
 
     if "wifi" in connected:
@@ -143,9 +142,9 @@ def main():
                 if prev and prev[0] == dev and now > prev[1]:
                     down = max(0, counts[0] - prev[2]) / (now - prev[1])
                     up = max(0, counts[1] - prev[3]) / (now - prev[1])
-                    out["tooltip"] += f"\n下载：{speed_text(down)}\n上传：{speed_text(up)}"
+                    out["tooltip"] += f"\n上传：{speed_text(up)}\n下载：{speed_text(down)}"
                 else:
-                    out["tooltip"] += "\n下载：…\n上传：…"
+                    out["tooltip"] += "\n上传：…\n下载：…"
                 prev = (dev, now, *counts)
             else:
                 prev = None

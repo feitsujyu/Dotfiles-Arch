@@ -84,7 +84,7 @@
     "custom/network": {
         // 网络：图标 + 连接速率（有线 󰈀 2.5G / 无线 󰤨 867M，无线的图标格数表示信号强度）
         //   network-status.py 一直运行，网络变化时立刻更新，另外每 5 秒更新一次
-        //   Wi-Fi 名、信号强度、IP 地址、实时的下载 / 上传速度（每 2 秒更新）在鼠标悬停的提示里
+        //   鼠标悬停的提示：有线是网卡名、IP 地址；无线是 Wi-Fi 名、信号强度、IP 地址；后面是实时的上传 / 下载速度（每 2 秒更新）
         "exec": "~/.config/waybar/scripts/network-status.py",
         "return-type": "json",
         // 左键显示 / 隐藏 Wi-Fi 弹窗（wifi-popup.py，从模块上方淡入；点外面、Esc、再点一次都会关闭）
