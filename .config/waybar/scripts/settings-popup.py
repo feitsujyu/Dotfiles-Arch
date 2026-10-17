@@ -13,6 +13,7 @@
 # · 第二层：这个分类的设置。标题栏左边的 ‹ 或 Esc 回到第一层
 # 分类：
 # · 显示器：每块连接着的屏幕的缩放比例；外接屏放在内置屏的哪一边
+# · 电源模式：性能 / 平衡 / 节能（power-profiles-daemon，通过 DBus 切换，不需要 root）
 #   以后要加别的分类时，写“建第二层画面”和“摘要”两个函数，加到 SettingsPopup.categories 里
 #
 # 显示器的设置写在 ~/.config/mango/local.conf（config.conf 用 source_optional 读入，不放进 dotfiles 仓库）。
@@ -36,7 +37,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("GLibUnix", "2.0")
 gi.require_version("GtkLayerShell", "0.1")
-from gi.repository import Gdk, GLib, GLibUnix, Gtk, GtkLayerShell, Pango  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, GLibUnix, Gtk, GtkLayerShell, Pango  # noqa: E402
 
 # 弹窗位置的计算（和其他弹窗共用，popup_anchor.py）
 sys.dont_write_bytecode = True  # 不在 scripts 目录里生成 __pycache__
@@ -54,6 +55,20 @@ POSITIONS = (("right", "右边"), ("left", "左边"), ("above", "上边"), ("bel
 SLIDE_MS = 150          # 滑动：内容向左 / 向右滑、返回按钮“‹”展开 / 收起
 RESIZE_MS = 250         # 伸展：弹窗的高度、粉色标题后面的“ › 分类名”
 INTERNAL = re.compile(r"^eDP")   # 笔记本内置屏的接口名
+# power-profiles-daemon 的 DBus 名字、路径、接口
+PPD = ("org.freedesktop.UPower.PowerProfiles", "/org/freedesktop/UPower/PowerProfiles",
+       "org.freedesktop.UPower.PowerProfiles")
+# 电源模式：(power-profiles-daemon 里的名字, 按钮上的文字, 说明)
+PROFILES = (
+    ("performance", "性能", "性能优先，风扇和耗电会增加"),
+    ("balanced", "平衡", "一般使用"),
+    ("power-saver", "节能", "降低性能，延长电池时间"),
+)
+# 性能模式暂时受限的原因（power-profiles-daemon 的 PerformanceDegraded）
+DEGRADED = {
+    "lap-detected": "检测到电脑放在腿上",
+    "high-operating-temperature": "温度太高",
+}
 NAMESPACE = "settings-menu"
 
 LOCAL_CONF = os.path.expanduser("~/.config/mango/local.conf")
@@ -263,7 +278,9 @@ class SettingsPopup:
         # 分类：(名字, 图标, 标题, 建第二层画面的函数, 摘要的函数)
         self.categories = [
             ("monitors", "󰍹", "显示器", self.build_monitors, self.monitors_summary),
+            ("power", "󰓅", "电源模式", self.build_power, self.power_summary),
         ]
+        self.ppd = self.connect_ppd()
         self.page = "home"
 
         self.panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, name="panel")
@@ -449,6 +466,62 @@ class SettingsPopup:
             btns.pack_start(b, True, True, 0)
         row.pack_start(btns, True, True, 0)
         return row
+
+    # ---------- 分类：电源模式 ----------
+    def connect_ppd(self):
+        """连接 power-profiles-daemon；模式在别处被改了时（PropertiesChanged）重建画面"""
+        try:
+            proxy = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE,
+                                                   None, *PPD, None)
+        except GLib.Error:
+            return None
+        proxy.connect("g-properties-changed", lambda *_: self.visible and self.build())
+        return proxy
+
+    def ppd_get(self, prop):
+        """power-profiles-daemon 的属性；daemon 没在运行时返回 None"""
+        v = self.ppd.get_cached_property(prop) if self.ppd else None
+        return v.unpack() if v is not None else None
+
+    def power_summary(self):
+        active = self.ppd_get("ActiveProfile")
+        return next((text for key, text, _ in PROFILES if key == active), active or "不能用")
+
+    def build_power(self, box):
+        active = self.ppd_get("ActiveProfile")
+        if active is None:
+            msg = Gtk.Label(label="取不到电源模式（power-profiles-daemon 没有运行）", xalign=0)
+            msg.get_style_context().add_class("sub")
+            box.pack_start(msg, False, False, 0)
+            return
+        available = {p.get("Profile") for p in self.ppd_get("Profiles") or []}
+        items = [(key, text) for key, text, _ in PROFILES if key in available]
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        card.get_style_context().add_class("card")
+        card.pack_start(self.button_row("模式", items, active, self.set_profile), False, False, 0)
+        note = next((desc for key, _, desc in PROFILES if key == active), "")
+        degraded = self.ppd_get("PerformanceDegraded")
+        if degraded:
+            note += f"\n性能模式暂时受限：{DEGRADED.get(degraded, degraded)}"
+        info = Gtk.Label(label=note, xalign=0)
+        info.set_line_wrap(True)
+        info.get_style_context().add_class("sub")
+        card.pack_start(info, False, False, 0)
+        box.pack_start(card, False, False, 0)
+
+    def set_profile(self, profile):
+        """切换电源模式（DBus 的 Properties.Set）；切换后 daemon 发出 PropertiesChanged，画面随之更新"""
+        if not self.ppd:
+            return
+        self.ppd.call("org.freedesktop.DBus.Properties.Set",
+                      GLib.Variant("(ssv)", (PPD[2], "ActiveProfile", GLib.Variant("s", profile))),
+                      Gio.DBusCallFlags.NONE, -1, None, self.on_profile_set)
+
+    def on_profile_set(self, proxy, res):
+        try:
+            proxy.call_finish(res)
+        except GLib.Error as e:
+            print(f"settings-popup: 切换电源模式失败：{e.message}", file=sys.stderr)
 
     # ---------- 修改 ----------
     def set_scale(self, name, value):
