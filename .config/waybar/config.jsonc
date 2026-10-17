@@ -19,7 +19,7 @@
     "modules-right": [
         "tray",
         "bluetooth",
-        "network",
+        "custom/network",
         "pulseaudio",
         "backlight",
         "battery",
@@ -81,15 +81,12 @@
     },
 
     // 网络状态
-    "network": {
-        // 只显示图标和信号强度（Wi-Fi 名在鼠标悬停的提示里）
-        "format-wifi": "󰖩 {signalStrength}%",
-        "format-ethernet": "󰈀 {ipaddr}/{cidr}",
-        "format-disconnected": "󰤮 Disconnected",
-        // 鼠标悬停的提示：Wi-Fi 连接中 → Wi-Fi 名；没有连接 → 未连接；有线网络 → 网卡名和网关
-        "tooltip-format": "{ifname} via {gwaddr}",
-        "tooltip-format-wifi": "{essid}",
-        "tooltip-format-disconnected": "未连接",
+    "custom/network": {
+        // 网络：图标 + 连接速率（有线 󰈀 2.5G / 无线 󰤨 867M，无线的图标格数表示信号强度）
+        //   network-status.py 一直运行，网络变化时立刻更新，另外每 10 秒更新一次
+        //   Wi-Fi 名、信号强度、IP 地址在鼠标悬停的提示里
+        "exec": "~/.config/waybar/scripts/network-status.py",
+        "return-type": "json",
         // 左键显示 / 隐藏 Wi-Fi 弹窗（wifi-popup.py，从模块上方淡入；点外面、Esc、再点一次都会关闭）
         // 右键在 kitty 里打开 nmtui（NetworkManager 自带的文字界面，弹窗处理不了的情况用它）
         // 另有 rofi 版的菜单：把 on-click 改成 "~/.config/waybar/scripts/wifi-menu.py" 就能使用

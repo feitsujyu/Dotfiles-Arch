@@ -9,7 +9,7 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 | | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty |
 | | `.config/mango/wallpaperd/` | 预先准备好壁纸、切换时不卡顿的壁纸程序（C，需要编译） |
 | waybar | `.config/waybar/config.jsonc`, `style.css` | 底部状态栏 |
-| | `.config/waybar/scripts/` | Wi-Fi / 蓝牙 / 音量 / 亮度 / 设置弹窗（Python + GTK3 layer shell） |
+| | `.config/waybar/scripts/` | Wi-Fi / 蓝牙 / 音量 / 亮度 / 设置弹窗（Python + GTK3 layer shell），网络模块（连接速率） |
 | | `.config/waybar/barprobe/` | 找出状态栏模块位置、让弹窗对齐的小程序（C，需要编译） |
 | kitty | `.config/kitty/` | 终端 |
 | rofi | `.config/rofi/` | 程序启动器（Lilac 主题） |

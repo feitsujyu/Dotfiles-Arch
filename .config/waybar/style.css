@@ -103,7 +103,7 @@ tooltip label {
 /* ---------- 右侧模块：深紫色胶囊 ---------- */
 
 #bluetooth,
-#network,
+#custom-network,
 #pulseaudio,
 #backlight,
 #battery,
@@ -159,7 +159,7 @@ tooltip label {
     color: @muted;
 }
 
-#network.disconnected {
+#custom-network.disconnected {
     color: @critical;
 }
 
