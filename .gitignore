@@ -16,7 +16,7 @@ __pycache__/
 
 # 虎码：个人词库、输入记录，以及别人发布的码表和图标（README 里写了怎么获取）
 .local/share/fcitx5/table/
-.local/share/icons/input_icon_tiger-code.png
+.local/share/icons/hicolor/32x32/apps/fcitx-tiger.png
 
 # fcitx5 自动生成的缓存
 .config/fcitx5/conf/cached_layouts

@@ -83,7 +83,7 @@ swaybg
 ### 4. 仓库里没有的东西
 
 - **虎码码表**：从虎码官方获取 fcitx5 版码表，放到 `~/.local/share/fcitx5/table/tiger.main.dict`。
-- **虎码图标**：放到 `~/.local/share/icons/input_icon_tiger-code.png`（`tiger.conf` 里写的是绝对路径 `/home/feitsujyu/...`，用户名不同时要改）。
+- **虎码图标**：32×32 的 png，放到 `~/.local/share/icons/hicolor/32x32/apps/fcitx-tiger.png`（`tiger.conf` 里只写图标名 `fcitx-tiger`）。
 - **壁纸**：png / jpg 放到 `~/Pictures/background/`，按文件名顺序切换（`Super+W` / `Super+Shift+W`）。
 
 ### 5. 重新登录 mango

@@ -10,12 +10,23 @@
 
 import json
 import os
+import re
 import subprocess
 
 from gi.repository import Gdk
 
-BAR_HEIGHT = 40  # waybar 的高度（config.jsonc 的 "height"），栏在屏幕下边
+WAYBAR_CONFIG = os.path.expanduser("~/.config/waybar/config.jsonc")
 BARPROBE = os.path.expanduser("~/.config/waybar/barprobe/barprobe")
+
+
+def bar_height():
+    """waybar 的高度：每次从 config.jsonc 的 "height" 读取（栏在屏幕下边），读不到时用 40"""
+    try:
+        with open(WAYBAR_CONFIG) as f:
+            m = re.search(r'"height"\s*:\s*(\d+)', f.read())
+        return int(m.group(1)) if m else 40
+    except OSError:
+        return 40
 
 
 def _mmsg(*args):
@@ -41,10 +52,11 @@ def locate():
         mon = _mmsg("monitor", cur["monitor"])
         x, y = cur["x"] - mon["x"], cur["y"] - mon["y"]
         width, height = mon["width"], mon["height"]
-        if not (height - BAR_HEIGHT <= y <= height and 0 <= x < width):
+        bar = bar_height()
+        if not (height - bar <= y <= height and 0 <= x < width):
             return None  # 鼠标不在栏上（例如手机发起蓝牙配对时自动打开）
         r = subprocess.run([BARPROBE, cur["monitor"], str(width), str(mon.get("scale", 1)),
-                            str(height - BAR_HEIGHT // 2), str(int(x))],
+                            str(height - bar // 2), str(int(x))],
                            capture_output=True, text=True, timeout=0.5)
         if r.returncode != 0:
             return None
