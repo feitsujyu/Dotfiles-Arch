@@ -11,7 +11,7 @@
 # · 主画面：静音按钮 + 音量滑块 + 百分比、输出设备选择、“各个程序单独音量” 按钮
 # · 各程序音量画面：正在播放声音的程序，每个一行（静音按钮 + 滑块 + 百分比），“‹” 回到主画面
 # · 两个画面之间：内容向左 / 向右滑动，窗口高度平滑地伸缩；标题栏的“ › 各个程序”和“‹”展开 / 收起
-#   （和设置弹窗 settings-popup.py 相同的动画，SLIDE_MS）
+#   （和设置弹窗 settings-popup.py 相同的动画：滑动 SLIDE_MS，伸展 RESIZE_MS）
 #
 # 音量的读取 / 设置用 pactl（PipeWire 的 pipewire-pulse 提供兼容接口）；
 # `pactl subscribe` 监听变化，音量键等从别处改了音量时，弹窗里的滑块也会马上跟着变。
@@ -40,7 +40,9 @@ import popup_anchor  # noqa: E402
 
 # ---------- 设置 ----------
 FADE_MS = 200           # 淡入 / 淡出的时间（毫秒）
-SLIDE_MS = 250          # 两个画面之间切换、程序列表高度变化的动画时间（毫秒）
+# 两个画面之间切换的动画时间（毫秒）
+SLIDE_MS = 150          # 滑动：内容向左 / 向右滑、返回按钮“‹”展开 / 收起、设备名淡出 / 淡入
+RESIZE_MS = 250         # 伸展：弹窗的高度（包括程序列表的增减）、粉色标题后面的“ › 各个程序”
 WIDTH = 400             # 弹窗宽度
 MARGIN_RIGHT = 191      # 离屏幕右边的距离（对准 waybar 的音量模块）
 #   每次打开时会查模块的实际位置（place），这个值只在查不到时使用
@@ -100,6 +102,7 @@ scale slider {
 }
 scale.muted highlight, scale.muted slider { background-color: #8e8c9e; }
 list, scrolledwindow, viewport { background-color: transparent; border: none; }
+scrolledwindow undershoot, scrolledwindow overshoot { background: none; }
 row { padding: 4px 8px; border-radius: 8px; background-color: transparent; outline: none; transition: none; }
 row:hover { background-color: rgba(58, 52, 112, 0.85); }
 row:selected, row:selected:hover { background-color: transparent; }
@@ -286,15 +289,21 @@ class VolumePopup:
         self.stack = Gtk.Stack(transition_duration=SLIDE_MS)
         self.stack.set_vhomogeneous(False)        # 高度跟着现在这个画面变
         self.stack.set_hhomogeneous(True)
-        self.stack.set_interpolate_size(True)     # 切换时高度也平滑地变化
         self.stack.add_named(self.build_main(), "main")
         self.stack.add_named(self.build_apps(), "apps")
-        self.panel.pack_start(self.stack, True, True, 0)
+        # 高度的动画（RESIZE_MS）比滑动（SLIDE_MS）长，所以不用 Stack 自带的高度插值，
+        # 而是把 Stack 放进一个 ScrolledWindow：平时高度跟着内容（NEVER），
+        # 动画期间改成 EXTERNAL（不显示滚动条、超出的部分被裁掉），由 follow_size 每一帧设置它的高度
+        self.clip = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                       vscrollbar_policy=Gtk.PolicyType.NEVER)
+        self.clip.add(self.stack)
+        self.panel.pack_start(self.clip, True, True, 0)
         self.win.add(self.panel)
         self.win.connect("key-press-event", self.on_key)
         self.panel.show_all()
         self.panel.set_opacity(0.0)
         self.apps_anim = None      # 程序列表高度的动画：(开始的高度, 目标高度, 开始的时间)
+        self.resize_anim = None    # 切换画面时弹窗高度的动画：(开始的高度, 目标高度, 开始的时间)
         self.following = False     # follow_size 是否正在运行
 
         threading.Thread(target=self.watch, daemon=True).start()
@@ -358,7 +367,7 @@ class VolumePopup:
         self.apps_empty = Gtk.Label(label="现在没有正在播放声音的程序", name="empty")
         # “没有程序” ⇄ 程序列表：淡入淡出，高度也平滑地变化
         self.apps_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE,
-                                    transition_duration=SLIDE_MS)
+                                    transition_duration=RESIZE_MS)
         self.apps_stack.set_vhomogeneous(False)
         self.apps_stack.set_interpolate_size(True)
         self.apps_stack.add_named(self.apps_scroll, "list")
@@ -375,21 +384,27 @@ class VolumePopup:
             Gtk.StackTransitionType.NONE if not animate
             else Gtk.StackTransitionType.SLIDE_LEFT if inner
             else Gtk.StackTransitionType.SLIDE_RIGHT)
-        for rev in (self.back_rev, self.crumb_rev, self.dev_rev):
-            rev.set_transition_duration(SLIDE_MS if animate else 0)
+        for rev, ms in ((self.back_rev, SLIDE_MS), (self.crumb_rev, RESIZE_MS), (self.dev_rev, SLIDE_MS)):
+            rev.set_transition_duration(ms if animate else 0)
         self.back_rev.set_reveal_child(inner)
         self.crumb_rev.set_reveal_child(inner)
         self.dev_rev.set_reveal_child(not inner)
+        start = self.stack.get_allocated_height()
         self.stack.set_visible_child_name(name)
         if not inner:
             self.apps_btn.grab_focus()
         if animate:
+            target = self.stack.get_child_by_name(name).get_preferred_height()[1]
+            self.clip.set_min_content_height(start)
+            self.clip.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.EXTERNAL)
+            self.resize_anim = (start, target, time.monotonic())
             self.start_follow()
         else:
+            self.end_resize()
             self.fit_size()
 
     def apps_height(self, animate):
-        """程序列表的高度 = 所有行的高度（最多 APPS_MAX_HEIGHT）；animate=True 时花 SLIDE_MS 伸缩过去"""
+        """程序列表的高度 = 所有行的高度（最多 APPS_MAX_HEIGHT）；animate=True 时花 RESIZE_MS 伸缩过去"""
         rows = self.apps.get_children()
         target = min(sum(r.get_preferred_height()[1] for r in rows), APPS_MAX_HEIGHT)
         start = max(0, self.apps_scroll.get_min_content_height())
@@ -406,21 +421,37 @@ class VolumePopup:
             self.panel.add_tick_callback(self.follow_size)
 
     def follow_size(self, _widget, _clock):
-        """动画期间的每一帧：推进列表高度的动画，并按现在的高度重设窗口大小
-        （layer-shell 的窗口不会自己变小）"""
+        """动画期间的每一帧：推进高度的动画（切换画面时的弹窗高度、程序列表的高度），
+        并按现在的高度重设窗口大小（layer-shell 的窗口不会自己变小）"""
         busy = self.stack.get_transition_running() or self.apps_stack.get_transition_running()
+        if self.resize_anim:
+            if self.step(self.resize_anim, self.clip):
+                busy = True
+            else:
+                self.end_resize()
         if self.apps_anim:
-            start, target, t0 = self.apps_anim
-            p = min(1.0, (time.monotonic() - t0) * 1000 / SLIDE_MS)
-            ease = 1 - (1 - p) ** 3  # 和 GTK 的 Stack 一样，开始快、结束慢
-            self.apps_scroll.set_min_content_height(round(start + (target - start) * ease))
-            if p < 1.0:
+            if self.step(self.apps_anim, self.apps_scroll):
                 busy = True
             else:
                 self.apps_anim = None
         self.win.resize(WIDTH, 1)
         self.following = busy
         return busy
+
+    @staticmethod
+    def step(anim, scroll):
+        """把 scroll 的高度推进到现在这一帧（开始快、结束慢）；动画还没结束时返回 True"""
+        start, target, t0 = anim
+        p = min(1.0, (time.monotonic() - t0) * 1000 / RESIZE_MS)
+        ease = 1 - (1 - p) ** 3
+        scroll.set_min_content_height(round(start + (target - start) * ease))
+        return p < 1.0
+
+    def end_resize(self):
+        """切换画面的高度动画结束：改回跟着内容的高度（程序增减时也能自动适应）"""
+        self.resize_anim = None
+        self.clip.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
+        self.clip.set_min_content_height(-1)
 
     def fit_size(self):
         def do():
@@ -500,7 +531,7 @@ class VolumePopup:
             #   程序增减 → 列表的高度伸缩；“没有程序” ⇄ 有程序 → apps_stack 淡入淡出并伸缩
             animate = self.visible and self.stack.get_visible_child_name() == "apps"
             was_list = self.apps_stack.get_visible_child_name() == "list"
-            self.apps_stack.set_transition_duration(SLIDE_MS if animate else 0)
+            self.apps_stack.set_transition_duration(RESIZE_MS if animate else 0)
             self.apps_height(animate and was_list and bool(apps))
             self.apps_stack.set_visible_child_name("list" if apps else "empty")
             if animate:

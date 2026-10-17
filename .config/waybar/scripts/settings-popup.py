@@ -50,7 +50,9 @@ MARGIN_RIGHT = 6        # 离屏幕右边的距离（只在查不到模块位置
 MARGIN_BOTTOM = 8       # 离 waybar 的距离
 SCALES = (1.0, 1.25, 1.5, 1.75, 2.0)
 POSITIONS = (("right", "右边"), ("left", "左边"), ("above", "上边"), ("below", "下边"))
-SLIDE_MS = 250          # 两层之间切换的动画时间（滑动，同时弹窗的高度从旧的一层伸缩到新的一层）
+# 两层之间切换的动画时间（毫秒）
+SLIDE_MS = 150          # 滑动：内容向左 / 向右滑、返回按钮“‹”展开 / 收起
+RESIZE_MS = 250         # 伸展：弹窗的高度、粉色标题后面的“ › 分类名”
 INTERNAL = re.compile(r"^eDP")   # 笔记本内置屏的接口名
 NAMESPACE = "settings-menu"
 
@@ -79,6 +81,9 @@ window, window.background { background-color: transparent; }
 .sub { color: #8e8c9e; font-size: 10pt; }
 .name { font-weight: bold; }
 .key { color: #8e8c9e; font-size: 11pt; min-width: 40px; }
+/* 包着两层内容的 ScrolledWindow（只用来在动画时裁切高度）：不要背景、边框和滚动边缘的阴影 */
+scrolledwindow, viewport { background-color: transparent; border: none; }
+scrolledwindow undershoot, scrolledwindow overshoot { background: none; }
 .card { background-color: rgba(58, 52, 112, 0.45); border-radius: 8px; padding: 8px 10px; }
 #back { padding: 2px 10px; }
 #back label { font-size: 13pt; }
@@ -266,14 +271,20 @@ class SettingsPopup:
         self.panel.pack_start(self.make_head(), False, False, 0)
         self.stack = Gtk.Stack()
         self.stack.set_vhomogeneous(False)        # 高度跟着现在这一层变
-        self.stack.set_interpolate_size(True)     # 切换时高度也平滑地变化
         self.stack.set_transition_duration(SLIDE_MS)
         self.pages = {}
         for key in ["home"] + [c[0] for c in self.categories]:
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             self.pages[key] = box
             self.stack.add_named(box, key)
-        self.panel.pack_start(self.stack, False, False, 0)
+        # 高度的动画（RESIZE_MS）比滑动（SLIDE_MS）长，所以不用 Stack 自带的高度插值，
+        # 而是把 Stack 放进一个 ScrolledWindow：平时高度跟着内容（NEVER），
+        # 动画期间改成 EXTERNAL（不显示滚动条、超出的部分被裁掉），由 follow_size 每一帧设置它的高度
+        self.clip = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                       vscrollbar_policy=Gtk.PolicyType.NEVER)
+        self.clip.add(self.stack)
+        self.panel.pack_start(self.clip, False, False, 0)
+        self.resize_anim = None    # 高度的动画：(开始的高度, 目标高度, 开始的时间)
         self.win.add(self.panel)
         self.win.connect("key-press-event", self.on_key)
         self.build()
@@ -306,7 +317,7 @@ class SettingsPopup:
         self.crumb = Gtk.Label()
         # SLIDE_LEFT：从文字的左边开始露出（“ › 显”→“ › 显示器”），看起来像粉色背景往右伸长
         self.crumb_rev = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_LEFT,
-                                      transition_duration=SLIDE_MS)
+                                      transition_duration=RESIZE_MS)
         self.crumb_rev.add(self.crumb)
         pill.pack_start(Gtk.Label(label="设置"), False, False, 0)
         pill.pack_start(self.crumb_rev, False, False, 0)
@@ -321,8 +332,8 @@ class SettingsPopup:
             # 回到第一层时不改文字，让收起的过程中还显示着原来的分类名
             title = next(c[2] for c in self.categories if c[0] == self.page)
             self.crumb.set_text(f" › {title}")
-        for rev in (self.back_rev, self.crumb_rev):
-            rev.set_transition_duration(SLIDE_MS if animate else 0)
+        for rev, ms in ((self.back_rev, SLIDE_MS), (self.crumb_rev, RESIZE_MS)):
+            rev.set_transition_duration(ms if animate else 0)
             rev.set_reveal_child(inner)
 
     def build_home(self, box):
@@ -354,13 +365,33 @@ class SettingsPopup:
         self.build_head(animate=True)
         self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT if forward
                                        else Gtk.StackTransitionType.SLIDE_RIGHT)
+        start = self.stack.get_allocated_height()
         self.stack.set_visible_child_name(page)
-        # layer-shell 的窗口不会自己变小：切换期间每一帧都按现在的高度重设窗口大小
+        target = self.pages[page].get_preferred_height()[1]
+        self.clip.set_min_content_height(start)
+        self.clip.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.EXTERNAL)
+        self.resize_anim = (start, target, time.monotonic())
         self.stack.add_tick_callback(self.follow_size)
 
     def follow_size(self, _widget, _clock):
+        """切换期间的每一帧：把高度从旧的一层推进到新的一层（开始快、结束慢），
+        并按现在的高度重设窗口大小（layer-shell 的窗口不会自己变小）"""
+        if not self.resize_anim:
+            return False
+        start, target, t0 = self.resize_anim
+        p = min(1.0, (time.monotonic() - t0) * 1000 / RESIZE_MS)
+        ease = 1 - (1 - p) ** 3
+        self.clip.set_min_content_height(round(start + (target - start) * ease))
+        if p >= 1.0:
+            self.end_resize()
         self.win.resize(WIDTH, 1)
-        return self.stack.get_transition_running()
+        return self.resize_anim is not None
+
+    def end_resize(self):
+        """高度的动画结束：改回跟着内容的高度（数值变了、行数变了时也能自动适应）"""
+        self.resize_anim = None
+        self.clip.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
+        self.clip.set_min_content_height(-1)
 
     def monitors_summary(self):
         if not self.monitors:
@@ -545,6 +576,7 @@ class SettingsPopup:
         self.monitors = mmsg_monitors() or self.monitors
         self.page = "home"     # 每次打开都从第一层开始
         self.stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        self.end_resize()
         self.build()
         self.place()
         self.catcher.show()
