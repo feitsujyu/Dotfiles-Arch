@@ -83,7 +83,7 @@
     // 网络状态
     "custom/network": {
         // 网络：图标 + 连接速率（有线 󰈀 2.5G / 无线 󰤨 867M，无线的图标格数表示信号强度）
-        //   network-status.py 一直运行，网络变化时立刻更新，另外每 10 秒更新一次
+        //   network-status.py 一直运行，网络变化时立刻更新，另外每 5 秒更新一次
         //   Wi-Fi 名、信号强度、IP 地址在鼠标悬停的提示里
         "exec": "~/.config/waybar/scripts/network-status.py",
         "return-type": "json",

@@ -7,7 +7,7 @@
 #
 # 一直运行，每次状态变化时输出一行 JSON（waybar 的 return-type: json）：
 #   - nmcli monitor 有输出（连上 / 断开 / 换网络）时立刻更新
-#   - 另外每 10 秒更新一次（无线的连接速率和信号强度会变化）
+#   - 另外每 5 秒更新一次（无线的连接速率和信号强度会变化）
 # 有线、无线都连着时，显示有线（NetworkManager 默认也优先用有线）。
 
 import json
@@ -16,7 +16,7 @@ import signal
 import subprocess
 import sys
 
-REFRESH = 10  # 秒
+REFRESH = 5  # 秒
 WIFI_ICONS = ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"]  # 信号强度 0～100% 分成 5 级
 
 
