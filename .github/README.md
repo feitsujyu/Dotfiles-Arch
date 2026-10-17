@@ -13,6 +13,7 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 | | `.config/waybar/barprobe/` | 找出状态栏模块位置、让弹窗对齐的小程序（C，需要编译） |
 | kitty | `.config/kitty/` | 终端 |
 | rofi | `.config/rofi/` | 程序启动器（Lilac 主题） |
+| Neovim | `.config/nvim/` | 主要用来看 / 写 Markdown（在 Neovim 里渲染、显示图片），也用来看代码。配色 catppuccin（颜色换成 Lilac），在 kitty 里标题、代码块的底色半透明 |
 | fcitx5 | `.config/fcitx5/` | 输入法设置（经典界面使用 Lilac 主题） |
 | | `.local/share/fcitx5/themes/lilac/` | 输入法候选框主题 |
 | | `.local/share/fcitx5/inputmethod/tiger.conf` | 虎码输入法设置 |
@@ -52,6 +53,8 @@ mangowm-git waybar kitty rofi
 python-gobject gtk3 gtk-layer-shell
 # 网络 / 蓝牙 / 声音 / 电源
 networkmanager bluez bluez-utils pipewire pipewire-pulse wireplumber upower power-profiles-daemon
+# Neovim（Markdown 渲染、语法高亮、图片、搜索）
+neovim tree-sitter-cli marksman imagemagick wl-clipboard ripgrep fd
 # 输入法
 fcitx5 fcitx5-chinese-addons fcitx5-gtk fcitx5-qt fcitx5-configtool fcitx5-lua inotify-tools
 # 字体
@@ -61,6 +64,13 @@ base-devel wayland wayland-protocols
 # 可选（不是必需的）：只在 wallpaperd 还没编译或编译失败时，wallpaper.sh 才改用 swaybg 显示壁纸
 swaybg
 ```
+
+Neovim 以后想加的功能（现在没有装）：
+
+| 功能 | 包 | 打开方法 |
+|---|---|---|
+| Markdown 的数学公式显示成排版后的图片 | `tectonic ghostscript`（不想联网下载 TeX 宏包时用 `texlive-basic texlive-latexextra ghostscript` 代替 `tectonic`） | `.config/nvim/lua/plugins/snacks.lua` 的 `math = { enabled = false }` 改成 `true` |
+| Markdown 的 Mermaid 图显示成图片 | `mermaid-cli`（约 360 MB，还依赖 nodejs 和 chromium，很重） | 装好后自动显示 |
 
 ### 2. 编译两个小程序
 
@@ -86,7 +96,14 @@ swaybg
 - **虎码图标**：32×32 的 png，放到 `~/.local/share/icons/hicolor/32x32/apps/fcitx-tiger.png`（`tiger.conf` 里只写图标名 `fcitx-tiger`）。
 - **壁纸**：png / jpg 放到 `~/Pictures/background/`，按文件名顺序切换（`Super+W` / `Super+Shift+W`）。
 
-### 5. 重新登录 mango
+### 5. Neovim 的插件
+
+第一次打开 `nvim` 时，会问要不要安装插件（从 GitHub 下载，版本按 `.config/nvim/nvim-pack-lock.json`），选 Yes。
+之后各语言的语法高亮解析器在后台下载、编译（要一两分钟），完成后重新打开文件就有高亮。
+
+图片显示、标题 / 代码块底色的半透明用的是 kitty 的功能，在别的终端里不显示图片、底色不透明（不会出错）。
+
+### 6. 重新登录 mango
 
 waybar、fcitx5、壁纸等都由 mango 的 `exec_once` 启动。
 
@@ -114,6 +131,8 @@ dotfiles pull
   - waybar 的 `config.jsonc`、各个弹窗脚本、fcitx5 的主题：重新登录 mango 最简单
     （只想重启 fcitx5 时：`fcitx5 -r -d`）
   - `wallpaperd.c`、`barprobe.c` 改了的话：重新执行各自的 `build.sh`
+  - Neovim 的设置（`.config/nvim/`）：重新打开 nvim
+    - 插件的版本（`nvim-pack-lock.json`）变了的话：在 nvim 里执行 `:lua vim.pack.update(nil, { target = "lockfile" })`，确认后（`:write`）重新打开 nvim；之后再执行 `:TSUpdate` 更新语法高亮的解析器
 - 只想先看看 GitHub 上有什么新的提交：`dotfiles fetch` 后 `dotfiles log --oneline main..origin/main`
 
 ## 日常使用
@@ -124,3 +143,6 @@ dotfiles add ~/.config/waybar/style.css   # 新文件要登记一次
 dotfiles commit -m "waybar: ..."
 dotfiles push
 ```
+
+更新 Neovim 的插件：在 nvim 里执行 `:lua vim.pack.update()`，看过更新内容后 `:write` 确认，再执行 `:TSUpdate`。
+插件的版本记录在 `.config/nvim/nvim-pack-lock.json`，和设置一起 commit。
