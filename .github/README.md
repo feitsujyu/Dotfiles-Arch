@@ -6,7 +6,7 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 |---|---|---|
 | mango | `.config/mango/config.conf` | 快捷键、动画、窗口规则、开机启动 |
 | | `.config/mango/local.conf.example` | 每台电脑自己的设置（`local.conf`，不放进仓库）的说明 |
-| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty |
+| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty、打开所有屏幕（Super + Shift + P） |
 | | `.config/mango/wallpaperd/` | 预先准备好壁纸、切换时不卡顿的壁纸程序（C，需要编译） |
 | waybar | `.config/waybar/config.jsonc`, `style.css` | 底部状态栏 |
 | | `.config/waybar/scripts/` | Wi-Fi / 蓝牙 / 音量 / 亮度 / 设置弹窗（Python + GTK3 layer shell），网络模块（连接速率） |
@@ -82,6 +82,11 @@ Neovim 以后想加的功能（现在没有装）：
 ### 3. 屏幕的缩放和位置
 
 不用手动设置。进入 mango 后点 waybar 最右边的齿轮图标 → “显示器”，选每块屏幕的缩放、外接屏的位置（内置屏的右边 / 左边 / 上边 / 下边）和对齐方式（上 / 下对齐或左 / 右对齐，默认居中）。
+
+每块屏幕名字的右边有开关：关掉后这块屏幕就像没接上一样（例如只用外接屏、只用笔记本的屏幕），上面的窗口移到开着的屏幕上，打开后自动回去。
+- 只剩一块开着的屏幕时不能关
+- 拔掉的屏幕再接上时是打开的；连接着的屏幕全是关闭时（例如关掉笔记本的屏幕后拔掉外接屏）自动全部打开
+- 万一黑屏：按 `Super + Shift + P` 打开所有屏幕
 
 - 设置写在 `~/.config/mango/local.conf`（每台电脑各自的文件，不放进仓库），mango 会自动重新加载，马上生效
 - 屏幕的位置按缩放后的大小自动算好，屏幕之间不会空出一段

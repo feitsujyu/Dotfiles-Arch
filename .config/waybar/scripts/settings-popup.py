@@ -12,14 +12,21 @@
 # · 第一层：设置的分类，每个分类一行（右边是现在设定的摘要）；点一下进入这个分类的第二层
 # · 第二层：这个分类的设置。标题栏左边的 ‹ 或 Esc 回到第一层
 # 分类：
-# · 显示器：每块连接着的屏幕的缩放比例；外接屏放在内置屏的哪一边、怎么对齐
+# · 显示器：每块连接着的屏幕的开 / 关、缩放比例；外接屏放在内置屏的哪一边、怎么对齐
 # · 电源模式：性能 / 平衡 / 节能（power-profiles-daemon，通过 DBus 切换，不需要 root）
 #   以后要加别的分类时，写“建第二层画面”和“摘要”两个函数，加到 SettingsPopup.categories 里
 #
 # 显示器的设置写在 ~/.config/mango/local.conf（config.conf 用 source_optional 读入，不放进 dotfiles 仓库）。
 # mango 发现文件变了会自动重新加载，所以点了按钮马上生效。
 # · 每块屏幕写一条 monitor_rule（缩放 + 位置）。位置按“缩放后的大小”算好，屏幕之间不会空出一段
-# · 程序在后台用 mmsg watch all-monitors 看着屏幕的连接：插上 / 拔掉显示器时，按记住的设置重新排列
+# · 关掉的屏幕在 monitor_rule 里加 disable:1（mango 重新加载时也保持关闭）。
+#   关掉后这块屏幕就像没有接上一样，上面的窗口移到开着的屏幕上（打开后自动回去）
+#   防止全部屏幕都关掉（黑屏）：
+#     - 只剩一块开着的屏幕时，它的开关不能关
+#     - 拔掉的屏幕忘掉“关闭”（再接上时是打开的）；连接着的屏幕全是关闭时（例如关掉内置屏后拔掉外接屏、
+#       或者这样重新登录），自动全部打开
+#     - 万一黑屏：Super + Shift + P 打开所有屏幕（mango/scripts/monitors-all-on.sh，不经过这个程序）
+# · 程序在后台用 mmsg watch all-monitors 看着屏幕的连接：插上 / 拔掉显示器、打开 / 关掉屏幕时，按记住的设置重新排列
 # · local.conf 里 MARK_BEGIN ～ MARK_END 之间由这个程序写入；其余的内容（手动加的设置）保留不动
 #   （monitor_rule 只能由这个程序写：同一块屏幕有多条规则时，启动时和重新加载时用到的不是同一条）
 
@@ -122,6 +129,18 @@ button label { color: #c9b9f2; font-size: 11pt; }
 button:hover { background-color: #6c5cc4; }
 button.current { background-color: #f5a0c8; }
 button.current label { color: #1f1a3d; font-weight: bold; }
+/* 屏幕的开关（和 Wi-Fi、蓝牙弹窗的开关一样） */
+switch {
+    background-color: #3a3470; background-image: none; border: none;
+    border-radius: 12px; box-shadow: none; min-height: 0;
+}
+switch:checked { background-color: #6c5cc4; }
+switch slider {
+    background-color: #f5a0c8; background-image: none; border: none;
+    border-radius: 10px; box-shadow: none; min-width: 20px; min-height: 20px;
+}
+switch image { color: transparent; }
+switch:disabled { opacity: 0.4; }
 """
 
 
@@ -135,10 +154,21 @@ def mmsg_monitors():
         return None
 
 
+# 屏幕缩放前的分辨率 {屏幕名: (宽, 高)}：关掉的屏幕 mmsg 给的大小是 0，所以记住开着时的大小
+SIZES = {}
+
+
+def is_enabled(m):
+    """关掉的屏幕：mmsg 里还在（连接着），但大小是 0"""
+    return m.get("width", 0) > 0 and m.get("height", 0) > 0
+
+
 def physical_size(m):
-    """缩放前的分辨率（mmsg 给的是缩放后的大小）"""
-    s = m.get("scale", 1) or 1
-    return round(m["width"] * s), round(m["height"] * s)
+    """缩放前的分辨率（mmsg 给的是缩放后的大小）；关掉的屏幕用记住的大小，不知道时是 None"""
+    if is_enabled(m):
+        s = m.get("scale", 1) or 1
+        SIZES[m["name"]] = (round(m["width"] * s), round(m["height"] * s))
+    return SIZES.get(m["name"])
 
 
 def logical(px, scale):
@@ -160,12 +190,12 @@ POS_RE = re.compile(r"^# 位置：(\S+)=(\S+)$")
 
 
 def read_local():
-    """local.conf → ({屏幕名: 缩放}, {屏幕名: (位置, 对齐)}, 其余的行)"""
+    """local.conf → ({屏幕名: 缩放}, {屏幕名: (位置, 对齐)}, {关掉的屏幕名}, 其余的行)"""
     try:
         lines = open(LOCAL_CONF).read().splitlines()
     except OSError:
         lines = []
-    scales, positions, rest = {}, {}, []
+    scales, positions, disabled, rest = {}, {}, set(), []
     inside = False
     for line in lines:
         if line == MARK_BEGIN:
@@ -181,6 +211,8 @@ def read_local():
                 scales[m.group(1)] = float(opts.get("scale", 1))
             except ValueError:
                 pass
+            if opts.get("disable") == "1":
+                disabled.add(m.group(1))
             continue
         p = POS_RE.match(line)
         if inside and p:
@@ -191,7 +223,14 @@ def read_local():
             rest.append(line)
     while rest and rest[-1] == "":
         rest.pop()
-    return scales, positions, rest
+    return scales, positions, disabled, rest
+
+
+def effective_disabled(monitors, disabled):
+    """真正要关掉的屏幕：只算连接着的（拔掉的屏幕忘掉“关闭”）；连接着的全是关闭时，全部打开"""
+    connected = {m["name"] for m in monitors}
+    off = disabled & connected
+    return set() if off == connected else off
 
 
 def layout(monitors, scales, positions):
@@ -199,6 +238,8 @@ def layout(monitors, scales, positions):
     内置屏（没有的话是第一块）放在 (0,0)，其他屏幕按记住的位置（右边 / 左边 / 上边 / 下边）紧挨着排，
     最后整体平移，让左上角是 (0,0)。
     对齐（和内置屏比）：左右排列时 上对齐 / 居中 / 下对齐，上下排列时 左对齐 / 居中 / 右对齐。"""
+    # 不知道大小的屏幕（登录时就是关掉的、刚打开的）不排：mango 先自动放，知道大小后再重新排
+    monitors = [m for m in monitors if physical_size(m)]
     if not monitors:
         return {}
     ordered = sorted(monitors, key=lambda m: (not is_internal(m["name"]), m["name"]))
@@ -235,10 +276,11 @@ def layout(monitors, scales, positions):
     return {n: (x - minx, y - miny) for n, (x, y) in pos.items()}
 
 
-def render_local(monitors, scales, positions, rest):
-    """local.conf 的内容。连接着的屏幕写缩放 + 位置；现在没连接、但设置过的屏幕只写缩放
-    （下次插上时先由 mango 自动排列，再由这个程序按记住的位置重新排）"""
-    pos = layout(monitors, scales, positions)
+def render_local(monitors, scales, positions, disabled, rest):
+    """local.conf 的内容。开着的屏幕写缩放 + 位置；关掉的屏幕写缩放 + disable:1；
+    现在没连接、但设置过的屏幕只写缩放（下次插上时先由 mango 自动排列，再由这个程序按记住的位置重新排）"""
+    off = effective_disabled(monitors, disabled)
+    pos = layout([m for m in monitors if m["name"] not in off], scales, positions)
     connected = {m["name"] for m in monitors}
     out = list(rest)
     if out:
@@ -247,7 +289,9 @@ def render_local(monitors, scales, positions, rest):
     for n in sorted(set(scales) | connected, key=lambda n: (not is_internal(n), n)):
         s = scales.get(n, 1.0)
         line = f"monitor_rule=name:^{n}$,scale:{s:g}"
-        if n in pos:
+        if n in off:
+            line += ",disable:1"
+        elif n in pos:
             line += f",x:{pos[n][0]},y:{pos[n][1]}"
         out.append(line)
     for n in sorted(positions):
@@ -277,6 +321,7 @@ class SettingsPopup:
         self.monitors = mmsg_monitors() or []
         self.names = None          # 上一次看到的“连接着的屏幕”
         self.watch_proc = None
+        self.rearrange_timer = None
 
         provider = Gtk.CssProvider()
         provider.load_from_data(CSS.encode())
@@ -424,7 +469,9 @@ class SettingsPopup:
         if not self.monitors:
             return ""
         ordered = sorted(self.monitors, key=lambda m: (not is_internal(m["name"]), m["name"]))
-        return " · ".join(f"{m['name']} {fmt_scale(m.get('scale', 1.0))}" for m in ordered)
+        on = self.enabled_names()
+        return " · ".join(f"{m['name']} {fmt_scale(m.get('scale', 1.0)) if m['name'] in on else '关闭'}"
+                          for m in ordered)
 
     # ---------- 分类：显示器 ----------
     def build_monitors(self, box):
@@ -433,35 +480,52 @@ class SettingsPopup:
             msg.get_style_context().add_class("sub")
             box.pack_start(msg, False, False, 0)
             return
-        scales, positions, _ = read_local()
+        scales, positions, _, _ = read_local()
         ordered = sorted(self.monitors, key=lambda m: (not is_internal(m["name"]), m["name"]))
         first = ordered[0]["name"]
+        on = self.enabled_names()
         for m in ordered:
             n = m["name"]
-            pw, ph = physical_size(m)
+            size = physical_size(m)
             card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
             card.get_style_context().add_class("card")
 
             title = Gtk.Box(spacing=8)
             name = Gtk.Label(label=n, xalign=0)
             name.get_style_context().add_class("name")
-            info = Gtk.Label(label=("内置 · " if is_internal(n) else "") + f"{pw}×{ph}", xalign=0)
+            parts = (["内置"] if is_internal(n) else []) + ([f"{size[0]}×{size[1]}"] if size else [])
+            if n not in on:
+                parts.append("已关闭")
+            info = Gtk.Label(label=" · ".join(parts), xalign=0)
             info.get_style_context().add_class("sub")
             title.pack_start(name, False, False, 0)
             title.pack_start(info, False, False, 0)
+            # 开关：只剩这一块开着时不能关（防止全部屏幕都关掉）
+            sw = Gtk.Switch(valign=Gtk.Align.CENTER, active=n in on)
+            sw.set_sensitive(not (n in on and len(on) == 1))
+            sw.connect("notify::active", lambda w, _p, n=n: self.set_enabled(n, w.get_active()))
+            title.pack_end(sw, False, False, 0)
             card.pack_start(title, False, False, 0)
 
+            rows = []
             cur = scales.get(n, m.get("scale", 1.0))
-            card.pack_start(self.button_row("缩放", [(s, fmt_scale(s)) for s in SCALES], cur,
-                                            lambda v, n=n: self.set_scale(n, v)), False, False, 0)
+            rows.append((self.button_row("缩放", [(s, fmt_scale(s)) for s in SCALES], cur,
+                                         lambda v, n=n: self.set_scale(n, v)), n in on))
             if n != first and len(ordered) > 1:
+                # 位置、对齐是和内置屏比的：两块都开着时才能改
                 where, align = positions.get(n, ("right", "center"))
                 label = f"在 {first} 的"
-                card.pack_start(self.button_row(label, POSITIONS, where,
-                                                lambda v, n=n: self.set_position(n, v)), False, False, 0)
+                usable = n in on and first in on
+                rows.append((self.button_row(label, POSITIONS, where,
+                                             lambda v, n=n: self.set_position(n, v)), usable))
                 aligns = ALIGNS["side" if where in ("right", "left") else "stack"]
-                card.pack_start(self.button_row("对齐", aligns, align,
-                                                lambda v, n=n: self.set_align(n, v)), False, False, 0)
+                rows.append((self.button_row("对齐", aligns, align,
+                                             lambda v, n=n: self.set_align(n, v)), usable))
+            for row, usable in rows:
+                if not usable:  # 关掉的屏幕：变灰，不能点
+                    row.set_sensitive(False)
+                    row.set_opacity(0.4)
+                card.pack_start(row, False, False, 0)
             box.pack_start(card, False, False, 0)
 
     def button_row(self, key, items, current, on_click):
@@ -537,30 +601,49 @@ class SettingsPopup:
             print(f"settings-popup: 切换电源模式失败：{e.message}", file=sys.stderr)
 
     # ---------- 修改 ----------
-    def set_scale(self, name, value):
-        scales, positions, rest = read_local()
-        for m in self.monitors:  # 还没写进 local.conf 的屏幕：先记下现在的缩放
+    def current(self):
+        """现在的设置：local.conf 的内容 + 还没写进 local.conf 的屏幕现在的缩放"""
+        scales, positions, disabled, rest = read_local()
+        for m in self.monitors:
             scales.setdefault(m["name"], m.get("scale", 1.0))
+        return scales, positions, disabled, rest
+
+    def enabled_names(self):
+        """开着的屏幕（按 local.conf 的设置算：刚点了开关、mango 还没重新加载完时也显示点了之后的状态）"""
+        off = effective_disabled(self.monitors, read_local()[2])
+        return {m["name"] for m in self.monitors} - off
+
+    def set_scale(self, name, value):
+        scales, positions, disabled, rest = self.current()
         scales[name] = value
-        self.apply(scales, positions, rest)
+        self.apply(scales, positions, disabled, rest)
 
     def set_position(self, name, value):
-        scales, positions, rest = read_local()
-        for m in self.monitors:
-            scales.setdefault(m["name"], m.get("scale", 1.0))
+        scales, positions, disabled, rest = self.current()
         positions[name] = (value, positions.get(name, ("right", "center"))[1])
-        self.apply(scales, positions, rest)
+        self.apply(scales, positions, disabled, rest)
 
     def set_align(self, name, value):
-        scales, positions, rest = read_local()
-        for m in self.monitors:
-            scales.setdefault(m["name"], m.get("scale", 1.0))
+        scales, positions, disabled, rest = self.current()
         positions[name] = (positions.get(name, ("right", "center"))[0], value)
-        self.apply(scales, positions, rest)
+        self.apply(scales, positions, disabled, rest)
 
-    def apply(self, scales, positions, rest):
+    def set_enabled(self, name, on):
+        """屏幕的开 / 关：写进 local.conf（disable:1），mango 重新加载后马上生效"""
+        scales, positions, disabled, rest = self.current()
+        if on:
+            disabled.discard(name)
+        else:
+            others = {m["name"] for m in self.monitors if m["name"] != name} - disabled
+            if not others:  # 最后一块开着的屏幕不能关（开关本来就是灰的，这里再确认一次）
+                self.build()
+                return
+            disabled.add(name)
+        self.apply(scales, positions, disabled, rest)
+
+    def apply(self, scales, positions, disabled, rest):
         self.monitors = mmsg_monitors() or self.monitors
-        write_local(render_local(self.monitors, scales, positions, rest))
+        write_local(render_local(self.monitors, scales, positions, disabled, rest))
         self.build()
         # mango 重新加载后屏幕的大小会变：稍后再读一次，更新画面上的数值
         GLib.timeout_add(600, self.refresh)
@@ -596,24 +679,31 @@ class SettingsPopup:
             mons = json.loads(line)["monitors"]
         except (ValueError, KeyError):
             return True
-        names = sorted(m["name"] for m in mons)
+        # 插上 / 拔掉、打开 / 关掉（Super + Shift + P 等弹窗以外的操作也算）时重新排列
+        names = sorted((m["name"], is_enabled(m)) for m in mons)
         if names != self.names:
             self.names = names
             self.monitors = mons
-            self.rearrange()
+            # 等 mango 重新加载完再写 local.conf：mango 正在重新加载时写的话，这次的修改可能会被漏掉
+            # （mango 读完配置后才记下文件的修改时间，读完到记下之间写的内容不会再重新加载）
+            if self.rearrange_timer:
+                GLib.source_remove(self.rearrange_timer)
+            self.rearrange_timer = GLib.timeout_add(500, self.rearrange)
             if self.visible:
                 self.build()
         return True
 
     def rearrange(self):
         """按记住的设置重新排列连接着的屏幕（local.conf 里还没有这个程序写的区块时什么都不做）"""
+        self.rearrange_timer = None
         try:
             if MARK_BEGIN not in open(LOCAL_CONF).read():
-                return
+                return False
         except OSError:
-            return
-        scales, positions, rest = read_local()
-        write_local(render_local(self.monitors, scales, positions, rest))
+            return False
+        scales, positions, disabled, rest = read_local()
+        write_local(render_local(self.monitors, scales, positions, disabled, rest))
+        return False
 
     # ---------- 窗口（和其他弹窗相同的做法） ----------
     def make_window(self, namespace, catcher):
