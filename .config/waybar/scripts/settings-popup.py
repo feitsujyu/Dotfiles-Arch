@@ -71,9 +71,10 @@ window, window.background { background-color: transparent; }
 }
 * { font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK SC"; font-size: 13pt; color: #c9b9f2; }
 #title {
-    background-color: #f5a0c8; color: #1f1a3d;
-    border-radius: 8px; padding: 4px 12px; font-weight: bold;
+    background-color: #f5a0c8;
+    border-radius: 8px; padding: 4px 12px;
 }
+#title label { color: #1f1a3d; font-weight: bold; }
 .section { color: #f5a0c8; font-weight: bold; }
 .sub { color: #8e8c9e; font-size: 10pt; }
 .name { font-weight: bold; }
@@ -262,8 +263,7 @@ class SettingsPopup:
 
         self.panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, name="panel")
         self.panel.set_size_request(WIDTH, -1)
-        self.head = Gtk.Box(spacing=8)
-        self.panel.pack_start(self.head, False, False, 0)
+        self.panel.pack_start(self.make_head(), False, False, 0)
         self.stack = Gtk.Stack()
         self.stack.set_vhomogeneous(False)        # 高度跟着现在这一层变
         self.stack.set_interpolate_size(True)     # 切换时高度也平滑地变化
@@ -293,18 +293,37 @@ class SettingsPopup:
         self.panel.show_all()
         self.stack.set_visible_child_name(self.page)
 
-    def build_head(self):
-        for child in self.head.get_children():
-            self.head.remove(child)
-        if self.page == "home":
-            self.head.pack_start(Gtk.Label(label="设置", name="title"), False, False, 0)
-        else:
-            back = Gtk.Button(label="‹", name="back")
-            back.connect("clicked", lambda _b: self.go("home"))
+    def make_head(self):
+        """标题栏：‹（返回）+ 粉色的“设置 › 分类名”
+        返回按钮和“ › 分类名”各放在一个 Gtk.Revealer 里：进入分类时向右展开，回到第一层时收起"""
+        head = Gtk.Box()
+        back = Gtk.Button(label="‹", name="back", margin_end=8)
+        back.connect("clicked", lambda _b: self.go("home"))
+        self.back_rev = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_RIGHT,
+                                     transition_duration=SLIDE_MS)
+        self.back_rev.add(back)
+        pill = Gtk.Box(name="title")
+        self.crumb = Gtk.Label()
+        # SLIDE_LEFT：从文字的左边开始露出（“ › 显”→“ › 显示器”），看起来像粉色背景往右伸长
+        self.crumb_rev = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_LEFT,
+                                      transition_duration=SLIDE_MS)
+        self.crumb_rev.add(self.crumb)
+        pill.pack_start(Gtk.Label(label="设置"), False, False, 0)
+        pill.pack_start(self.crumb_rev, False, False, 0)
+        head.pack_start(self.back_rev, False, False, 0)
+        head.pack_start(pill, False, False, 0)
+        return head
+
+    def build_head(self, animate=False):
+        """按现在的层设置标题栏；animate=False 时直接变成最终的样子（打开弹窗时）"""
+        inner = self.page != "home"
+        if inner:
+            # 回到第一层时不改文字，让收起的过程中还显示着原来的分类名
             title = next(c[2] for c in self.categories if c[0] == self.page)
-            self.head.pack_start(back, False, False, 0)
-            self.head.pack_start(Gtk.Label(label=f"设置 › {title}", name="title"), False, False, 0)
-        self.head.show_all()
+            self.crumb.set_text(f" › {title}")
+        for rev in (self.back_rev, self.crumb_rev):
+            rev.set_transition_duration(SLIDE_MS if animate else 0)
+            rev.set_reveal_child(inner)
 
     def build_home(self, box):
         for key, icon, title, _build, summary in self.categories:
@@ -332,7 +351,7 @@ class SettingsPopup:
         """切换到某一层：进入分类时向左滑，回到第一层时向右滑"""
         forward = page != "home"
         self.page = page
-        self.build_head()
+        self.build_head(animate=True)
         self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT if forward
                                        else Gtk.StackTransitionType.SLIDE_RIGHT)
         self.stack.set_visible_child_name(page)
