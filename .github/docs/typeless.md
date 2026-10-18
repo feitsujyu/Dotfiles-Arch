@@ -18,6 +18,7 @@ Typeless 更新后，可以按最后的 [更新后的检查](#更新后的检查
 | `.config/mango/scripts/typeless-launch.sh` | 启动 Typeless（PATH 的最前面加上 `scripts/typeless/`） |
 | `.config/mango/scripts/typeless/wl-copy`, `wl-paste` | wl-clipboard 的替身（见 [问题 3](#3-识别结果粘贴不出来还会卡死)） |
 | `.config/mango/scripts/xwayland-workarea.py` | 把 XWayland 的可用区域设置成屏幕去掉 waybar 的部分（常驻） |
+| `.config/mango/scripts/typeless-clickthrough.py` | 浮动条的空白处让鼠标穿过去（常驻，见 [问题 9](#9-浮动条的空白处点不到后面的窗口)） |
 | `.config/kitty/typeless.conf` | kitty 里 Ctrl+V 也能粘贴（`kitty.conf` 用 `include` 读入） |
 | `.config/nvim/lua/config/typeless.lua` | Neovim 里 Ctrl+V 的处理（`init.lua` 里 `require`） |
 | `~/.local/share/applications/typeless.desktop` | rofi 的入口（不在仓库里，`typeless-launch.sh` 自动生成，见 [问题 8](#8-开机启动rofi-的入口)） |
@@ -144,6 +145,17 @@ Typeless：原来的剪贴板 wl-paste 读出来 → 识别结果 wl-copy 放进
 - 退出 Typeless 后偶尔会留下一个进程，要用 `kill`（SIGTERM）结束。
 - 用命令重新启动 Typeless 时，主窗口有时会自己打开（关掉就缩回托盘）。
 
+### 9. 浮动条的空白处点不到后面的窗口
+
+- **现象**：鼠标移到透明的浮动条上，焦点就到了浮动条（标题 Status），点击、滚动都到不了后面的窗口。
+- **原因**：Typeless 在 Linux 上用 X11 的 shape 把浮动条的形状（bounding shape）设成只有按钮等的部分（没有显示东西时是 1×1），
+  纯 X11 里其他地方鼠标会穿过去。但 XWayland 告诉 mango“哪里接收鼠标”（Wayland 的 input region）时只看 input shape，
+  而 Typeless 没有设置 input shape（一直是整个窗口 750×500），所以 mango 以为整个浮动条都接收鼠标。
+  （确认方法：用 libXext 的 `XShapeGetRectangles` 读两个 shape；手动把 input shape 设成和 bounding shape 一样后，鼠标就穿过去了。）
+- **对策**：`typeless-clickthrough.py`（常驻）每 0.1 秒把浮动条的 input shape 设成和 bounding shape 一样。
+  录音时出现的按钮部分照常能点（实测：录音时两个 shape 都变成按钮的 164×82，鼠标移到按钮上能聚焦；结束后回到 1×1）。
+  Typeless 在运行时才连接 XWayland，XWayland 断开后重新连接。
+
 ## 调查的方法
 
 - **Typeless 的历史记录**：`~/.config/Typeless/typeless.db`（SQLite）的 `history_v2` 表，`mode` 是 `voice_transcript`（听写）/ `voice_command`（Ask Anything）/ `voice_translation`（翻译）。
@@ -169,4 +181,5 @@ Typeless（或 wl-clipboard、mango）更新后，下面的对策可能就不需
 | kitty / Neovim 的 Ctrl+V（问题 4、5） | Typeless 支持终端的粘贴键（Ctrl+Shift+V），或者用输入法的方式输入（fcitx5 版） | 删掉 `kitty/typeless.conf`、`nvim/lua/config/typeless.lua` |
 | 可用区域（问题 6） | mango 自己设置 `_NET_WORKAREA`（`DISPLAY=:0 xprop -root _NET_WORKAREA`，先停掉 `xwayland-workarea.py`）；或者 Typeless 改成 Wayland 程序 | 删掉 `xwayland-workarea.py` 和它的 `exec_once` |
 | rofi 的入口（问题 8） | Typeless 启动后 `~/.local/share/applications/typeless.desktop` 还在（先停掉 `typeless-launch.sh` 里重新写的部分） | 删掉 `typeless-launch.sh` 里重新写入口的部分，改成手动建一次 |
+| 浮动条的穿透（问题 9） | 停掉 `typeless-clickthrough.py` 后，鼠标在浮动条的空白处时焦点不会到浮动条上（XWayland 或 Typeless 改了） | 删掉 `typeless-clickthrough.py` 和它的 `exec_once` |
 | 窗口规则（问题 7） | 窗口的 app_id / 标题变了的话规则就不起作用：`mmsg get all-clients` 看 app_id 和标题 | 改 `typeless.conf` 的 `window_rule` |

@@ -7,7 +7,7 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 | mango | `.config/mango/config.conf` | 快捷键、动画、窗口规则、开机启动 |
 | | `.config/mango/typeless.conf` | Typeless（语音输入）的开机启动、窗口规则（`config.conf` 用 `source=` 读入）；用哪个键写在每台电脑各自的 `typeless-keys.conf`（不放进仓库） |
 | | `.config/mango/local.conf.example` | 每台电脑自己的设置（`local.conf`，不放进仓库）的说明 |
-| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty、打开所有屏幕（Super + Shift + P）、Typeless 的快捷键和选键、X11 程序的可用区域 |
+| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty、打开所有屏幕（Super + Shift + P）、Typeless 的快捷键和选键、浮动条的鼠标穿透、X11 程序的可用区域 |
 | | `.config/mango/udev/` | Typeless 的快捷键用的 udev 规则（要用 sudo 复制到 `/etc/udev/rules.d/`） |
 | | `.config/mango/wallpaperd/` | 预先准备好壁纸、切换时不卡顿的壁纸程序（C，需要编译） |
 | waybar | `.config/waybar/config.jsonc`, `style.css` | 底部状态栏 |
