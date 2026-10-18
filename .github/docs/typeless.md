@@ -11,8 +11,8 @@ Typeless 更新后，可以按最后的 [更新后的检查](#更新后的检查
 | 文件 | 内容 |
 |---|---|
 | `.config/mango/typeless.conf` | mango 的设置：开机启动、窗口规则（`config.conf` 用 `source=` 读入） |
-| `.config/mango/scripts/typeless-keys.py` | 选键：弹出窗口，依次按三个功能要用的键，生成 `typeless-keys.conf` |
-| `~/.config/mango/typeless-keys.conf` | 用哪个键（mango 的 `bindc` / `bindrc`）。每台电脑各自的文件，不放进仓库（`typeless.conf` 用 `source_optional=` 读入） |
+| `.config/mango/scripts/typeless-keys.py` | 选键：弹出窗口，依次按三个功能要用的键（可以是组合键），生成 `typeless-keys.conf` |
+| `~/.config/mango/typeless-keys.conf` | 用哪个键（mango 的 `bind`）。每台电脑各自的文件，不放进仓库（`typeless.conf` 用 `source_optional=` 读入） |
 | `.config/mango/scripts/typeless-trigger.py` | 只给 Typeless 用的虚拟键盘（常驻），mango 的快捷键通过它“按” Typeless 的快捷键 |
 | `.config/mango/udev/70-typeless-trigger.rules` | 只给当前登录的用户读这个虚拟键盘的权限，并让 mango 不使用它 |
 | `.config/mango/scripts/typeless-launch.sh` | 启动 Typeless（PATH 的最前面加上 `scripts/typeless/`） |
@@ -30,8 +30,8 @@ Typeless 更新后，可以按最后的 [更新后的检查](#更新后的检查
 
 ```
 自己选的键（typeless-keys.conf）
-  → mango 的 bindc / bindrc（按下 / 松开）→ typeless-trigger.py press|release <功能>
-  → 常驻的 typeless-trigger.py serve 在虚拟键盘 “typeless-trigger” 上按下 / 松开 RightAlt 等
+  → mango 的 bind（按下时）→ typeless-trigger.py tap <功能>
+  → 常驻的 typeless-trigger.py serve 在虚拟键盘 “typeless-trigger” 上轻按一下 RightAlt 等
   → Typeless 读到虚拟键盘的按键（和直接按右 Alt 一样）
 ```
 
@@ -66,14 +66,18 @@ Typeless：原来的剪贴板 wl-paste 读出来 → 识别结果 wl-copy 放进
 - **原因**：输入框也是靠 Typeless 读 `/dev/input` 来收按键的，用户不在 `input` 组时什么都收不到。
 - **对策**：Typeless 的快捷键保持默认，用虚拟键盘（`typeless-trigger.py`）把自己选的键转成 RightAlt 系列。
 - 键不写死：有的日语键盘也没有 変換 / 無変換，换成标准布局的键盘也一样，所以用 `typeless-keys.py` 选键，写到每台电脑各自的 `typeless-keys.conf`。
-  - 键用键码（`code:数字`）记录：和键盘布局无关，就是按下的那个实体键。
+  - 单个键、组合键（例如 Ctrl + Alt + Z）都可以：按下后画面上显示按下的键，确认后点“下一步”。
+  - 键用键码（`code:数字`）记录：和键盘布局无关，就是按下的那个实体键。组合键的修饰键记成 mango 的 `CTRL+ALT` 这种写法。
   - 选键时先让 `typeless-keys.conf` 暂时变空：已经绑定的键会被 mango 先拿走，窗口收不到。取消时恢复原来的内容。
-  - Right Ctrl 这类修饰键也可以用。实测（虚拟键盘按 Right Ctrl / Shift / Alt）：**按下**时 mango 看到的修饰键里没有它自己（匹配 `NONE`），
-    **松开**时有（匹配 `CTRL` 等），所以修饰键的 `bindrc` 要写上对应的修饰键（`typeless-keys.py` 自动处理）。
+  - Right Ctrl 这类修饰键也可以单独用。实测（虚拟键盘按 Right Ctrl / Shift / Alt）：修饰键**按下**时 mango 看到的修饰键里没有它自己（匹配 `NONE`），松开时有（匹配 `CTRL` 等）。
     mango 的快捷键表示不了的修饰键（AltGr 等 `ISO_Level3_Shift`）不能选。
   - 已经被 mango 的其他快捷键占用的键选不了（按了窗口收不到）。
-- mango 里同一个键同时绑定“按下”（`bind`）和“松开”（`bindr`）会被当作冲突，两个都要加 `c`（`bindc` / `bindrc`）。
-- 实体键按住时 mango 会按键盘的重复速度一直发 press。晚到的 press 可能排在 release 后面，变成“松开后又按下”，所以松开后 0.2 秒内的 press 不理会（`IGNORE_PRESS_AFTER_RELEASE`）。
+- **只传“按下”，虚拟键盘上“轻按”一下**（`typeless-trigger.py tap`），不传实体键的“松开”：
+  - Typeless 是轻按一次开始、再轻按一次结束，按住不放反而会取消录音，所以不需要知道实体键什么时候松开。
+  - 传“松开”的话，组合键先松开修饰键时 mango 的“松开”绑定匹配不上（修饰键的状态变了），Typeless 那边会一直按着。
+    为了这种情况给所有修饰键的组合都加“松开”绑定的话，平时单独按那个键（例如 Z）也会每次都启动一个程序，所以没有这样做。
+  - 按住不放时 mango 会按键盘的重复速度一直触发（`repeat_delay` 600 毫秒后每秒 25 次，实测按住 2 秒触发 37 次）。
+    同一个功能和上一次触发不到 1 秒就不理会（`IGNORE_REPEAT`，比 `repeat_delay` 长），按住不放也只轻按一次。所以开始和结束之间至少要隔 1 秒（结束时用别的功能的键不受影响）。
 
 ### 2. Ask Anything、翻译都变成了普通听写
 
@@ -144,8 +148,8 @@ Typeless：原来的剪贴板 wl-paste 读出来 → 识别结果 wl-copy 放进
 
 - **Typeless 的历史记录**：`~/.config/Typeless/typeless.db`（SQLite）的 `history_v2` 表，`mode` 是 `voice_transcript`（听写）/ `voice_command`（Ask Anything）/ `voice_translation`（翻译）。
   只读地打开：`sqlite3 -readonly "file:$HOME/.config/Typeless/typeless.db?mode=ro" "select created_at, mode, status from history_v2 order by created_at desc limit 5;"`
-- **不说话也能测的方法**：轻按一下开始、再轻按一下结束，看历史记录里的 `mode`（`typeless-trigger.py press ask` → `release ask` 这样从命令行发也可以）。
-  按住不放的话 Typeless 会取消录音、显示快捷键一览（Typeless 的规定），测不了。
+- **不说话也能测的方法**：轻按一下开始、再轻按一下结束，看历史记录里的 `mode`（从命令行 `typeless-trigger.py tap ask`，1 秒以上之后 `typeless-trigger.py tap dictation` 也可以）。
+  Typeless 本身在快捷键按住不放时会取消录音、显示快捷键一览（Typeless 的规定）；现在的虚拟键盘总是轻按，不会出现这种情况。
   注意：麦克风会录到房间里的声音，可能会生成真正的回答。
 - **Typeless 的程序**：`/opt/Typeless/resources/app.asar`（asar 格式，Python 几行就能解开）。
   JavaScript 是混淆过的；字符串可以用 Typeless 自带的 Electron 还原（`ELECTRON_RUN_AS_NODE=1 /opt/Typeless/typeless 脚本.js`，不用另外装 node）。

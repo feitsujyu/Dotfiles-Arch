@@ -2,12 +2,12 @@
 # Typeless（语音输入）的三个功能用哪个键：弹出窗口，依次按想用的键，生成 ~/.config/mango/typeless-keys.conf
 #
 # typeless-keys.conf 是这台电脑自己的设置（键盘不一样），不放进仓库；typeless.conf 用 source_optional 读入。
-# 生成的是 mango 的 bindc / bindrc（按下 / 松开），让 typeless-trigger.py 在虚拟键盘上“按”Typeless 的快捷键。
+# 生成的是 mango 的 bind（按下时），让 typeless-trigger.py 在虚拟键盘上“轻按”Typeless 的快捷键。
 #
-#   键用键码（code:数字）记录：和键盘布局无关，就是按下的那个实体键
-#   只能用单个键（不能是组合键）。Ctrl / Shift / Alt / Super 这类修饰键也可以（例如右边的 Ctrl），
-#   但这个键原来的作用就没有了
-#   已经被 mango 的其他快捷键占用的键，按了窗口收不到（mango 先拿走了），要选别的键
+#   每一步按下要用的键（单个键或组合键，例如 Ctrl + Alt + Z），画面上显示按下的键，确认后点“下一步”
+#   键用键码（code:数字）记录：和键盘布局无关，就是按下的那个实体键；组合键的修饰键记成 mango 的 CTRL / ALT 等
+#   Ctrl / Shift / Alt / Super 这类修饰键也可以单独用（例如右边的 Ctrl），但这个键原来的作用就没有了
+#   已经被 mango 的其他快捷键占用的键（组合键），按了窗口收不到（mango 先拿走了），要选别的键
 #   选键的时候，现在的 Typeless 的键暂时不起作用（否则按了会直接启动 Typeless，窗口收不到）；取消时恢复原样
 
 import os
@@ -33,13 +33,19 @@ FEATURES = [
     ("translate", "翻译模式", "Right Alt + Right Shift"),
 ]
 
-# 修饰键：松开时 mango 看到的修饰键里还有它自己，所以“松开”的绑定要写上对应的修饰键
-MODIFIERS = {
-    "Control_L": "CTRL", "Control_R": "CTRL",
-    "Shift_L": "SHIFT", "Shift_R": "SHIFT",
-    "Alt_L": "ALT", "Alt_R": "ALT", "Meta_L": "ALT", "Meta_R": "ALT",
-    "Super_L": "SUPER", "Super_R": "SUPER",
-    "Hyper_L": "HYPER", "Hyper_R": "HYPER",
+# 组合键里按着的修饰键（GTK 的状态）→ mango 的写法。按这个顺序显示
+MOD_MASKS = [
+    (Gdk.ModifierType.CONTROL_MASK, "CTRL"),
+    (Gdk.ModifierType.SHIFT_MASK, "SHIFT"),
+    (Gdk.ModifierType.MOD1_MASK, "ALT"),
+    (Gdk.ModifierType.SUPER_MASK | Gdk.ModifierType.MOD4_MASK, "SUPER"),
+    (Gdk.ModifierType.HYPER_MASK | Gdk.ModifierType.MOD3_MASK, "HYPER"),
+]
+MOD_NAMES = {"CTRL": "Ctrl", "SHIFT": "Shift", "ALT": "Alt", "SUPER": "Super", "HYPER": "Hyper"}
+# 单独当作键用时可以选的修饰键（mango 的快捷键表示不了 AltGr 等，不能选）
+MODIFIER_KEYS = {
+    "Control_L", "Control_R", "Shift_L", "Shift_R", "Alt_L", "Alt_R", "Meta_L", "Meta_R",
+    "Super_L", "Super_R", "Hyper_L", "Hyper_R",
 }
 
 # 显示用的键名（没有的显示 keysym 的名字）
@@ -50,23 +56,29 @@ DISPLAY_NAMES = {
     "Alt_L": "Left Alt", "Alt_R": "Right Alt",
     "Super_L": "Left Super", "Super_R": "Right Super",
     "Menu": "Menu", "Print": "Print Screen", "Scroll_Lock": "Scroll Lock", "Pause": "Pause",
+    "space": "Space", "Return": "Enter", "Escape": "Esc", "BackSpace": "Backspace",
 }
 
 
-def display_name(keysym):
-    return DISPLAY_NAMES.get(keysym, keysym)
+def key_text(key):
+    """(键码, keysym, 修饰键) → 显示用的文字，例如 Ctrl + Alt + Z"""
+    _, keysym, mods = key
+    name = DISPLAY_NAMES.get(keysym, keysym.upper() if len(keysym) == 1 else keysym)
+    return " + ".join([MOD_NAMES[m] for m in mods] + [name])
 
 
 def read_current():
-    """现在的设置：{功能: (键码, keysym)}，以及文件原来的内容（取消时恢复用）"""
+    """现在的设置：{功能: (键码, keysym, 修饰键)}，以及文件原来的内容（取消时恢复用）"""
     try:
         with open(KEYS_FILE) as f:
             text = f.read()
     except OSError:
         return {}, None
     current = {}
-    for feature, code, keysym in re.findall(r"^# key (\w+) code=(\d+) keysym=(\S+)$", text, re.M):
-        current[feature] = (int(code), keysym)
+    for feature, code, keysym, mods in re.findall(
+        r"^# key (\w+) code=(\d+) keysym=(\S+)(?: mods=(\S*))?$", text, re.M
+    ):
+        current[feature] = (int(code), keysym, tuple(m for m in mods.split("+") if m))
     return current, text
 
 
@@ -78,24 +90,21 @@ def write_file(text):
 
 
 def render(keys):
-    """keys：{功能: (键码, keysym)} → typeless-keys.conf 的内容"""
+    """keys：{功能: (键码, keysym, 修饰键)} → typeless-keys.conf 的内容"""
     lines = [
         "# Typeless（语音输入）的三个功能用哪个键：这台电脑自己的设置（不放进仓库）",
         "# 由 ~/.config/mango/scripts/typeless-keys.py 生成，改的时候重新运行它",
-        "# 同一个键同时绑定“按下”和“松开”，所以加上 c（允许同一个键有多个绑定）",
     ]
     for feature, label, _ in FEATURES:
         if feature not in keys:
             lines += ["", f"# {label}：不使用"]
             continue
-        code, keysym = keys[feature]
-        release_mod = MODIFIERS.get(keysym, "NONE")
+        code, keysym, mods = keys[feature]
         lines += [
             "",
-            f"# {label}：{display_name(keysym)}",
-            f"# key {feature} code={code} keysym={keysym}",
-            f"bindc=NONE,code:{code},spawn,{TRIGGER} press {feature}",
-            f"bindrc={release_mod},code:{code},spawn,{TRIGGER} release {feature}",
+            f"# {label}：{key_text(keys[feature])}",
+            f"# key {feature} code={code} keysym={keysym} mods={'+'.join(mods)}",
+            f"bind={'+'.join(mods) or 'NONE'},code:{code},spawn,{TRIGGER} tap {feature}",
         ]
     return "\n".join(lines) + "\n"
 
@@ -107,23 +116,26 @@ class Setup(Gtk.Window):
         self.original = original
         self.keys = {}
         self.step = 0
+        self.candidate = None  # 这一步按下的键（还没有点“下一步”）
         self.saved = False
 
-        self.set_default_size(520, 260)
+        self.set_default_size(600, 360)
         self.set_border_width(20)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self.add(box)
 
         self.title = Gtk.Label(xalign=0)
         self.body = Gtk.Label(xalign=0, wrap=True)
+        self.pressed = Gtk.Label(xalign=0)
         self.message = Gtk.Label(xalign=0, wrap=True)
-        for label in (self.title, self.body, self.message):
+        for label in (self.title, self.body, self.pressed, self.message):
             box.pack_start(label, False, False, 0)
 
         buttons = Gtk.Box(spacing=8)
         box.pack_end(buttons, False, False, 0)
         self.back_button = self.button(buttons, "上一步", self.on_back)
         self.skip_button = self.button(buttons, "不使用这个功能", self.on_skip)
+        self.next_button = self.button(buttons, "下一步", self.on_next)
         self.save_button = self.button(buttons, "保存", self.on_save)
         self.button(buttons, "取消", lambda *_: self.close(), pack_end=True)
 
@@ -143,51 +155,73 @@ class Setup(Gtk.Window):
         done = self.step >= len(FEATURES)
         self.back_button.set_sensitive(self.step > 0)
         self.skip_button.set_visible(not done)
+        self.next_button.set_visible(not done)
+        self.next_button.set_sensitive(self.candidate is not None)
         self.save_button.set_visible(done)
         if done:
             self.title.set_markup("<b>确认</b>")
             lines = []
             for feature, label, _ in FEATURES:
                 key = self.keys.get(feature)
-                lines.append(f"{label}：{display_name(key[1]) if key else '不使用'}")
+                lines.append(f"{label}：{key_text(key) if key else '不使用'}")
             self.body.set_text("\n".join(lines) + "\n\n没问题的话按“保存”（mango 会马上读入）。")
+            self.pressed.set_text("")
         else:
             feature, label, default = FEATURES[self.step]
             now = self.current.get(feature)
             self.title.set_markup(f"<b>第 {self.step + 1} / {len(FEATURES)} 步：“{label}”用哪个键？</b>")
             self.body.set_text(
-                f"请按一个键（单个键，不是组合键）。\n"
+                "请按下要用的键：单个键，或者“修饰键 + 一个键”的组合键（例如 Ctrl + Alt + Z）。"
+                "按错了就再按一次，确认后点“下一步”。\n"
                 f"Typeless 默认的键：{default}\n"
-                f"现在的设置：{display_name(now[1]) if now else '没有'}\n\n"
-                f"按了没有反应的话，这个键已经被 mango 的其他快捷键占用了，请选别的键。"
+                f"现在的设置：{key_text(now) if now else '没有'}\n\n"
+                "注意：\n"
+                "・组合键只能是 Ctrl / Shift / Alt / Super 加上一个键，不能自定义两个普通键的组合（例如 変換 + 空格）。\n"
+                "・组合键里的修饰键不分左右（Ctrl + Z 用左右哪个 Ctrl 都算）；单独用修饰键时分左右（例如只用右 Ctrl）。\n"
+                "・单独用作一个功能的修饰键，不要再用在别的功能的组合键里（按那个组合键时两个功能都会启动）。\n"
+                "・按了没有反应的话，这个键已经被 mango 的其他快捷键占用了，请选别的键。"
             )
+            text = key_text(self.candidate) if self.candidate else "（还没有按）"
+            self.pressed.set_markup(f"按下的键：<b>{GLib.markup_escape_text(text)}</b>")
         self.message.set_markup(f"<span foreground='#f07a9a'>{GLib.markup_escape_text(message)}</span>")
 
     def on_key(self, _widget, event):
         if self.step >= len(FEATURES):
             return True
-        keysym = Gdk.keyval_name(event.keyval) or f"keycode{event.hardware_keycode}"
-        code = event.hardware_keycode
-        if event.is_modifier and keysym not in MODIFIERS:
+        keysym = Gdk.keyval_name(Gdk.keyval_to_lower(event.keyval)) or f"keycode{event.hardware_keycode}"
+        if event.is_modifier and keysym not in MODIFIER_KEYS:
             self.update(f"{keysym} 不能用（mango 的快捷键表示不了这个修饰键），请选别的键。")
             return True
-        for feature, label, _ in FEATURES[: self.step]:
-            if self.keys.get(feature, (None,))[0] == code:
-                self.update(f"{display_name(keysym)} 已经用于“{label}”了，请选别的键。")
-                return True
-        self.keys[FEATURES[self.step][0]] = (code, keysym)
-        self.step += 1
+        state = event.state
+        if state & Gdk.ModifierType.MOD5_MASK:
+            self.update("AltGr 等修饰键不能用在组合键里（mango 的快捷键表示不了），请选别的键。")
+            return True
+        # 按着的修饰键（按下修饰键本身时，GTK 的状态里还没有它自己）
+        mods = tuple(name for mask, name in MOD_MASKS if state & mask)
+        self.candidate = (event.hardware_keycode, keysym, mods)
         self.update()
         return True
 
+    def on_next(self, *_):
+        for feature, label, _ in FEATURES[: self.step]:
+            key = self.keys.get(feature)
+            if key and (key[0], key[2]) == (self.candidate[0], self.candidate[2]):
+                self.update(f"{key_text(self.candidate)} 已经用于“{label}”了，请选别的键。")
+                return
+        self.keys[FEATURES[self.step][0]] = self.candidate
+        self.go(self.step + 1)
+
     def on_skip(self, *_):
         self.keys.pop(FEATURES[self.step][0], None)
-        self.step += 1
-        self.update()
+        self.go(self.step + 1)
 
     def on_back(self, *_):
-        self.step -= 1
-        self.keys.pop(FEATURES[self.step][0], None)
+        self.go(self.step - 1)
+
+    def go(self, step):
+        """到第 step 步。回到已经设过的步骤时，显示之前选的键"""
+        self.step = step
+        self.candidate = self.keys.get(FEATURES[step][0]) if step < len(FEATURES) else None
         self.update()
 
     def on_save(self, *_):

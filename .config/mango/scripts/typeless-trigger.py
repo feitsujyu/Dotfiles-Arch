@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-# Typeless（语音输入）的快捷键：用日语键盘的单键代替右 Alt 的组合键，并且不需要把用户加入 input 组
+# Typeless（语音输入）的快捷键：用自己选的键（可以是组合键）代替右 Alt 的组合键，并且不需要把用户加入 input 组
 #
 # Typeless 是直接读取键盘设备（/dev/input/event*）来检测快捷键的，通常要把用户加入 input 组
 # （这样你运行的所有程序都能读到全部按键）。这里改成：
 #   1. 这个程序建一个只给 Typeless 用的虚拟键盘“typeless-trigger”（/dev/uinput）
-#   2. mango 的快捷键（typeless-keys.conf，用 typeless-keys.py 生成）在实体键按下 / 松开时，让这个程序在虚拟键盘上按下 / 松开对应的键
+#   2. mango 的快捷键（typeless-keys.conf，用 typeless-keys.py 生成）按下时，让这个程序在虚拟键盘上“轻按”一下对应的键
+#      （Typeless 是轻按一次开始、再轻按一次结束，按住不放反而会取消录音，所以不传实体键的“松开”：
+#       组合键先松开哪个键都没关系，也不会出现“松开没传到、一直按着”）
 #   3. udev 规则（.config/mango/udev/70-typeless-trigger.rules，要用 sudo 复制到 /etc/udev/rules.d/）
 #      只给当前登录的用户读这个虚拟键盘的权限，并且让 mango 不使用它（虚拟的按键只给 Typeless）
 # Typeless 那边的快捷键保持默认（RightAlt 等），看到的和直接按右 Alt 完全一样
 #
 # 用法：
 #   typeless-trigger.py serve            常驻（mango 的 exec_once 启动）
-#   typeless-trigger.py press <功能>     实体键按下时（mango 的 bind）
-#   typeless-trigger.py release <功能>   实体键松开时（mango 的 bindr）
+#   typeless-trigger.py tap <功能>       实体键按下时（mango 的 bind）
 # 功能和对应的键见 ACTIONS
 
 import fcntl
@@ -48,14 +49,16 @@ UI_DEV_CREATE = 0x5501
 UI_DEV_DESTROY = 0x5502
 EV_SYN, EV_KEY, SYN_REPORT = 0, 1, 0
 BUS_USB = 0x03
-# 实体键按住时，mango 会按键盘的重复速度一直发 press（每次都启动一个 typeless-trigger.py），
-# 晚到的 press 可能排在 release 后面，变成“松开后又按下、一直按着”。松开后这么久之内的 press 不理会
-IGNORE_PRESS_AFTER_RELEASE = 0.2  # 秒
+# 实体键按住时，mango 会按键盘的重复速度一直发 tap（config.conf 的 repeat_delay = 600 毫秒后，每秒 25 次）。
+# 同一个功能的 tap 和上一个 tap 的间隔不到这么久就不理会（比 repeat_delay 长，按住不放也只轻按一次；
+# 所以开始和结束之间至少要隔这么久）
+IGNORE_REPEAT = 1.0  # 秒
+TAP_HOLD = 0.1  # 秒：轻按时按下多久再松开
 KEY_GAP = 0.05  # 秒：组合键的各个键之间的间隔（见 emit）
 
 
 def send(command):
-    """press / release：把指令发给常驻的程序（没有在运行时什么也不做）"""
+    """tap：把指令发给常驻的程序（没有在运行时什么也不做）"""
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
             s.sendto(command.encode(), SOCKET)
@@ -84,6 +87,13 @@ def emit(fd, keys, value):
         os.write(fd, struct.pack("llHHi", 0, 0, EV_SYN, SYN_REPORT, 0))
 
 
+def should_tap(last_tap, action, now):
+    """按住不放时的重复不理会：和上一个 tap（包括不理会的）的间隔不到 IGNORE_REPEAT 秒时 False"""
+    previous = last_tap.get(action)
+    last_tap[action] = now
+    return previous is None or now - previous >= IGNORE_REPEAT
+
+
 def serve():
     os.makedirs(RUNTIME, exist_ok=True)
     lock = open(LOCK, "w")
@@ -93,16 +103,9 @@ def serve():
         sys.exit(0)  # 已经在运行
 
     fd = create_keyboard()
-    held = set()  # 正在按着的功能（实体键按住时 mango 会重复发 press，只按下一次）
-    released_at = {}  # 功能 → 上一次松开的时间
-
-    def release_all(*_):
-        for action in list(held):
-            emit(fd, reversed(ACTIONS[action]), 0)
-        held.clear()
+    last_tap = {}  # 功能 → 上一次收到 tap 的时间（包括不理会的）
 
     def quit_(*_):
-        release_all()
         fcntl.ioctl(fd, UI_DEV_DESTROY)
         sys.exit(0)
 
@@ -124,25 +127,19 @@ def serve():
             continue
         if action not in ACTIONS:
             continue
-        now = time.monotonic()
-        if verb == "press" and action not in held:
-            if now - released_at.get(action, 0) < IGNORE_PRESS_AFTER_RELEASE:
-                continue
-            held.add(action)
+        if verb == "tap" and should_tap(last_tap, action, time.monotonic()):
             emit(fd, ACTIONS[action], 1)
-        elif verb == "release" and action in held:
-            held.discard(action)
-            released_at[action] = now
+            time.sleep(TAP_HOLD)
             emit(fd, reversed(ACTIONS[action]), 0)
 
 
 def main():
     if len(sys.argv) == 2 and sys.argv[1] == "serve":
         serve()
-    elif len(sys.argv) == 3 and sys.argv[1] in ("press", "release"):
-        send(f"{sys.argv[1]} {sys.argv[2]}")
+    elif len(sys.argv) == 3 and sys.argv[1] == "tap":
+        send(f"tap {sys.argv[2]}")
     else:
-        print(f"usage: {sys.argv[0]} serve | press <action> | release <action>", file=sys.stderr)
+        print(f"usage: {sys.argv[0]} serve | tap <action>", file=sys.stderr)
         print(f"  actions: {', '.join(ACTIONS)}", file=sys.stderr)
         sys.exit(2)
 

@@ -118,7 +118,7 @@ Neovim 以后想加的功能（现在没有装）：
 [Typeless](https://www.typeless.com/) 是 AUR 的 `typeless-bin`。这里**不把用户加入 `input` 组**，用自己选的单个键代替 Typeless 的快捷键
 （Typeless 默认的是听写 Right Alt、Ask Anything Right Alt + Space、翻译模式 Right Alt + Right Shift，Typeless 那边保持默认）。
 
-用法：轻按一次开始说话，说完再轻按一次（三个键中的任意一个）结束。按住不放的话 Typeless 会取消录音、显示快捷键一览。
+用法：轻按一次开始说话，说完再轻按一次（三个键中的任意一个）结束（开始和结束之间至少隔 1 秒）。
 
 新电脑上的顺序（**先恢复 dotfiles，再装 Typeless**）：
 
@@ -133,7 +133,7 @@ Neovim 以后想加的功能（现在没有装）：
    ```
 
 4. 重新登录 mango（`/dev/uinput` 的权限生效；Typeless 由 mango 通过启动脚本启动）。
-5. 选键：运行 `~/.config/mango/scripts/typeless-keys.py`，在弹出的窗口里依次按三个功能要用的键（会显示 Typeless 默认的键作为参考；不用的功能可以跳过）。
+5. 选键：运行 `~/.config/mango/scripts/typeless-keys.py`，在弹出的窗口里依次按三个功能要用的键（单个键或组合键；画面上会显示按下的键和 Typeless 默认的键，确认后点“下一步”；不用的功能可以跳过）。
    设置写在 `~/.config/mango/typeless-keys.conf`（每台电脑各自的文件，不放进仓库），mango 马上读入。换键盘时重新运行一次。
 6. 第一次打开 Typeless 时登录账号、做初始设置。Typeless 可能会提出“把用户加入 input 组”，**不要同意**。
 
