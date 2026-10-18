@@ -4,7 +4,7 @@
 # Typeless 是直接读取键盘设备（/dev/input/event*）来检测快捷键的，通常要把用户加入 input 组
 # （这样你运行的所有程序都能读到全部按键）。这里改成：
 #   1. 这个程序建一个只给 Typeless 用的虚拟键盘“typeless-trigger”（/dev/uinput）
-#   2. mango 的快捷键（typeless.conf）在实体键按下 / 松开时，让这个程序在虚拟键盘上按下 / 松开对应的键
+#   2. mango 的快捷键（typeless-keys.conf，用 typeless-keys.py 生成）在实体键按下 / 松开时，让这个程序在虚拟键盘上按下 / 松开对应的键
 #   3. udev 规则（.config/mango/udev/70-typeless-trigger.rules，要用 sudo 复制到 /etc/udev/rules.d/）
 #      只给当前登录的用户读这个虚拟键盘的权限，并且让 mango 不使用它（虚拟的按键只给 Typeless）
 # Typeless 那边的快捷键保持默认（RightAlt 等），看到的和直接按右 Alt 完全一样

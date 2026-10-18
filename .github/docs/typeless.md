@@ -10,7 +10,9 @@ Typeless 更新后，可以按最后的 [更新后的检查](#更新后的检查
 
 | 文件 | 内容 |
 |---|---|
-| `.config/mango/typeless.conf` | mango 的设置：快捷键、开机启动、窗口规则（`config.conf` 用 `source=` 读入） |
+| `.config/mango/typeless.conf` | mango 的设置：开机启动、窗口规则（`config.conf` 用 `source=` 读入） |
+| `.config/mango/scripts/typeless-keys.py` | 选键：弹出窗口，依次按三个功能要用的键，生成 `typeless-keys.conf` |
+| `~/.config/mango/typeless-keys.conf` | 用哪个键（mango 的 `bindc` / `bindrc`）。每台电脑各自的文件，不放进仓库（`typeless.conf` 用 `source_optional=` 读入） |
 | `.config/mango/scripts/typeless-trigger.py` | 只给 Typeless 用的虚拟键盘（常驻），mango 的快捷键通过它“按” Typeless 的快捷键 |
 | `.config/mango/udev/70-typeless-trigger.rules` | 只给当前登录的用户读这个虚拟键盘的权限，并让 mango 不使用它 |
 | `.config/mango/scripts/typeless-launch.sh` | 启动 Typeless（PATH 的最前面加上 `scripts/typeless/`） |
@@ -27,7 +29,7 @@ Typeless 更新后，可以按最后的 [更新后的检查](#更新后的检查
 ### 快捷键
 
 ```
-实体键（変換 / 無変換 / カタカナひらがな）
+自己选的键（typeless-keys.conf）
   → mango 的 bindc / bindrc（按下 / 松开）→ typeless-trigger.py press|release <功能>
   → 常驻的 typeless-trigger.py serve 在虚拟键盘 “typeless-trigger” 上按下 / 松开 RightAlt 等
   → Typeless 读到虚拟键盘的按键（和直接按右 Alt 一样）
@@ -36,6 +38,7 @@ Typeless 更新后，可以按最后的 [更新后的检查](#更新后的检查
 - Typeless 直接读 `/dev/input/event*` 来检测快捷键，通常要把用户加入 `input` 组。加入的话，用户运行的所有程序都能读到全部按键（包括密码），所以没有这样做。
 - udev 规则只给名字是 `typeless-trigger` 的设备加 `uaccess`（当前登录的用户可以读），并设置 `LIBINPUT_IGNORE_DEVICE`（mango 不使用它，虚拟的按键只给 Typeless）。
 - Typeless 的键盘程序会独占（EVIOCGRAB）它读的设备，再通过自己的虚拟键盘 “Typeless Keyboard Helper” 把按键送回系统。
+- 建虚拟键盘要用 `/dev/uinput`：这个权限是 `typeless-bin` 包自带的 udev 规则（`/usr/lib/udev/rules.d/70-typeless-uinput.rules`，`TAG+="uaccess"`）给的，所以要先装 `typeless-bin`、重新登录后才能用。
 - 用法：**轻按一次开始说话，说完再轻按一次结束**（结束时按三个键中的哪一个都可以，模式不会变）。
 
 ### 输入识别结果
@@ -61,8 +64,14 @@ Typeless：原来的剪贴板 wl-paste 读出来 → 识别结果 wl-copy 放进
 
 - **现象**：Typeless 的默认快捷键是 RightAlt 系列，日语键盘没有右 Alt。设置画面里改快捷键的输入框按什么键都没有反应。
 - **原因**：输入框也是靠 Typeless 读 `/dev/input` 来收按键的，用户不在 `input` 组时什么都收不到。
-- **对策**：Typeless 的快捷键保持默认，用虚拟键盘（`typeless-trigger.py`）把 変換 / 無変換 / カタカナひらがな 转成 RightAlt 系列。
-  想换实体键时改 `typeless.conf` 的 `bindc` / `bindrc`。
+- **对策**：Typeless 的快捷键保持默认，用虚拟键盘（`typeless-trigger.py`）把自己选的键转成 RightAlt 系列。
+- 键不写死：有的日语键盘也没有 変換 / 無変換，换成标准布局的键盘也一样，所以用 `typeless-keys.py` 选键，写到每台电脑各自的 `typeless-keys.conf`。
+  - 键用键码（`code:数字`）记录：和键盘布局无关，就是按下的那个实体键。
+  - 选键时先让 `typeless-keys.conf` 暂时变空：已经绑定的键会被 mango 先拿走，窗口收不到。取消时恢复原来的内容。
+  - Right Ctrl 这类修饰键也可以用。实测（虚拟键盘按 Right Ctrl / Shift / Alt）：**按下**时 mango 看到的修饰键里没有它自己（匹配 `NONE`），
+    **松开**时有（匹配 `CTRL` 等），所以修饰键的 `bindrc` 要写上对应的修饰键（`typeless-keys.py` 自动处理）。
+    mango 的快捷键表示不了的修饰键（AltGr 等 `ISO_Level3_Shift`）不能选。
+  - 已经被 mango 的其他快捷键占用的键选不了（按了窗口收不到）。
 - mango 里同一个键同时绑定“按下”（`bind`）和“松开”（`bindr`）会被当作冲突，两个都要加 `c`（`bindc` / `bindrc`）。
 - 实体键按住时 mango 会按键盘的重复速度一直发 press。晚到的 press 可能排在 release 后面，变成“松开后又按下”，所以松开后 0.2 秒内的 press 不理会（`IGNORE_PRESS_AFTER_RELEASE`）。
 
@@ -150,7 +159,7 @@ Typeless（或 wl-clipboard、mango）更新后，下面的对策可能就不需
 
 | 对策 | 检查方法 | 不需要时 |
 |---|---|---|
-| 虚拟键盘（问题 1） | Typeless 不用 `input` 组也能检测快捷键（例如支持 Wayland 的全局快捷键、XDG portal）；或者设置画面能收到按键 | 删掉 `typeless.conf` 的 `bindc` / `bindrc` 和 `typeless-trigger.py serve`，udev 规则 |
+| 虚拟键盘（问题 1） | Typeless 不用 `input` 组也能检测快捷键（例如支持 Wayland 的全局快捷键、XDG portal）；或者设置画面能收到按键 | 删掉 `typeless.conf` 的 `source_optional=…typeless-keys.conf` 和 `typeless-trigger.py serve`，`typeless-keys.py`，udev 规则 |
 | 组合键的间隔（问题 2） | `KEY_GAP = 0` 时 Ask Anything 的历史记录是 `voice_command` | 留着也没有坏处 |
 | wl-clipboard 的替身（问题 3） | `sh -c 'echo test \| /usr/bin/wl-copy >&- 2>&-'; /usr/bin/wl-paste` 能读出 test（wl-clipboard 2.3.0 时 wl-copy 会退出，退出码 134）；或者 Typeless 不再关掉输出 | 删掉 `typeless-launch.sh` 和 `scripts/typeless/`，开机启动和 `.desktop` 直接启动 `/opt/Typeless/typeless`。Neovim 的“丢掉 Ctrl+V”用到 `wl-copy` 替身记录的时间，要一起改 |
 | kitty / Neovim 的 Ctrl+V（问题 4、5） | Typeless 支持终端的粘贴键（Ctrl+Shift+V），或者用输入法的方式输入（fcitx5 版） | 删掉 `kitty/typeless.conf`、`nvim/lua/config/typeless.lua` |

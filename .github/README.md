@@ -5,9 +5,9 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 | 程序 | 文件 | 内容 |
 |---|---|---|
 | mango | `.config/mango/config.conf` | 快捷键、动画、窗口规则、开机启动 |
-| | `.config/mango/typeless.conf` | Typeless（语音输入）的快捷键、开机启动（`config.conf` 用 `source=` 读入） |
+| | `.config/mango/typeless.conf` | Typeless（语音输入）的开机启动、窗口规则（`config.conf` 用 `source=` 读入）；用哪个键写在每台电脑各自的 `typeless-keys.conf`（不放进仓库） |
 | | `.config/mango/local.conf.example` | 每台电脑自己的设置（`local.conf`，不放进仓库）的说明 |
-| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty、打开所有屏幕（Super + Shift + P）、Typeless 的快捷键、X11 程序的可用区域 |
+| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty、打开所有屏幕（Super + Shift + P）、Typeless 的快捷键和选键、X11 程序的可用区域 |
 | | `.config/mango/udev/` | Typeless 的快捷键用的 udev 规则（要用 sudo 复制到 `/etc/udev/rules.d/`） |
 | | `.config/mango/wallpaperd/` | 预先准备好壁纸、切换时不卡顿的壁纸程序（C，需要编译） |
 | waybar | `.config/waybar/config.jsonc`, `style.css` | 底部状态栏 |
@@ -115,22 +115,29 @@ Neovim 以后想加的功能（现在没有装）：
 
 ### 6. Typeless（语音输入，可选）
 
-[Typeless](https://www.typeless.com/) 是 AUR 的 `typeless-bin`。这里**不把用户加入 `input` 组**，用日语键盘的单键代替 Typeless 的快捷键：
+[Typeless](https://www.typeless.com/) 是 AUR 的 `typeless-bin`。这里**不把用户加入 `input` 组**，用自己选的单个键代替 Typeless 的快捷键
+（Typeless 默认的是听写 Right Alt、Ask Anything Right Alt + Space、翻译模式 Right Alt + Right Shift，Typeless 那边保持默认）。
 
-| 键 | 功能（Typeless 那边的快捷键保持默认） |
-|---|---|
-| `変換` | 听写（RightAlt） |
-| `無変換` | Ask Anything（RightAlt + Space） |
-| `カタカナひらがな` | 翻译模式（RightAlt + RightShift） |
+用法：轻按一次开始说话，说完再轻按一次（三个键中的任意一个）结束。按住不放的话 Typeless 会取消录音、显示快捷键一览。
 
-用法：轻按一次开始说话，说完再轻按一次（任意一个键）结束。按住不放的话 Typeless 会取消录音、显示快捷键一览。
+新电脑上的顺序（**先恢复 dotfiles，再装 Typeless**）：
 
-需要做一次 udev 规则（只给当前登录的用户读 Typeless 专用的虚拟键盘的权限）：
+1. 按上面的步骤恢复 dotfiles。Typeless 还没装时，登录 mango 时 Typeless 相关的开机启动会失败，没有影响。
+2. 安装 Typeless：`yay -S typeless-bin`。这个包自带让当前登录的用户使用 `/dev/uinput` 的 udev 规则（`/usr/lib/udev/rules.d/70-typeless-uinput.rules`），
+   Typeless 和这里的虚拟键盘都要用它。
+3. 装这里的 udev 规则（只给当前登录的用户读 Typeless 专用的虚拟键盘的权限）：
 
-```bash
-sudo install -m 644 ~/.config/mango/udev/70-typeless-trigger.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules
-```
+   ```bash
+   sudo install -m 644 ~/.config/mango/udev/70-typeless-trigger.rules /etc/udev/rules.d/
+   sudo udevadm control --reload-rules
+   ```
+
+4. 重新登录 mango（`/dev/uinput` 的权限生效；Typeless 由 mango 通过启动脚本启动）。
+5. 选键：运行 `~/.config/mango/scripts/typeless-keys.py`，在弹出的窗口里依次按三个功能要用的键（会显示 Typeless 默认的键作为参考；不用的功能可以跳过）。
+   设置写在 `~/.config/mango/typeless-keys.conf`（每台电脑各自的文件，不放进仓库），mango 马上读入。换键盘时重新运行一次。
+6. 第一次打开 Typeless 时登录账号、做初始设置。Typeless 可能会提出“把用户加入 input 组”，**不要同意**。
+
+先装 Typeless 也可以，但在恢复 dotfiles、重新登录之前不要启动 Typeless（这时还没有启动脚本，识别结果会粘贴不出来、还可能卡死）。
 
 Typeless 由 mango 在后台启动（`.config/mango/typeless.conf` 的 `exec_once`，通过 `.config/mango/scripts/typeless-launch.sh`）。
 rofi 的 “Typeless” 也要通过这个脚本启动，入口 `~/.local/share/applications/typeless.desktop` 由这个脚本自动生成（不在仓库里）。
