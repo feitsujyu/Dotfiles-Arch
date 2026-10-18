@@ -18,7 +18,7 @@ Typeless 更新后，可以按最后的 [更新后的检查](#更新后的检查
 | `.config/mango/scripts/typeless-launch.sh` | 启动 Typeless（PATH 的最前面加上 `scripts/typeless/`） |
 | `.config/mango/scripts/typeless/wl-copy`, `wl-paste` | wl-clipboard 的替身（见 [问题 3](#3-识别结果粘贴不出来还会卡死)） |
 | `.config/mango/scripts/xwayland-workarea.py` | 把 XWayland 的可用区域设置成屏幕去掉 waybar 的部分（常驻） |
-| `.config/mango/scripts/typeless-clickthrough.py` | 浮动条的空白处让鼠标穿过去（常驻，见 [问题 9](#9-浮动条的空白处点不到后面的窗口)） |
+| `.config/mango/scripts/typeless-windows.py` | 浮动条的空白处让鼠标穿过去、接了外接显示器时浮动条和回答卡片放到有焦点的屏幕（常驻，见 [问题 9](#9-浮动条的空白处点不到后面的窗口)、[问题 10](#10-外接显示器时只显示在原来的屏幕上)） |
 | `.config/kitty/typeless.conf` | kitty 里 Ctrl+V 也能粘贴（`kitty.conf` 用 `include` 读入） |
 | `.config/nvim/lua/config/typeless.lua` | Neovim 里 Ctrl+V 的处理（`init.lua` 里 `require`） |
 | `~/.local/share/applications/typeless.desktop` | rofi 的入口（不在仓库里，`typeless-launch.sh` 自动生成，见 [问题 8](#8-开机启动rofi-的入口)） |
@@ -122,7 +122,7 @@ Typeless：原来的剪贴板 wl-paste 读出来 → 识别结果 wl-copy 放进
   X11 程序从 XWayland 的 `_NET_WORKAREA` 知道可用区域，但 mango 不设置它，所以 Typeless 以为整个屏幕都能用。
   mango 会照办 XWayland 浮动窗口自己请求的位置，所以只靠窗口规则（只在窗口出现时生效）挡不住。
 - **对策**：`xwayland-workarea.py`（常驻）设置 `_NET_WORKAREA`。屏幕插拔、开关时重新设置（`mmsg watch all-monitors`）；XWayland 没有 X11 程序时会退出、值会消失，所以每 5 秒检查一次。XWayland 没在运行时不去连接它（连接会让 mango 启动 XWayland）。
-- 限制：Chromium / Electron 只对 XWayland 的**主屏幕**使用这个值（其他屏幕当作整块都能用），所以设置成主屏幕的可用区域。接外接显示器、Typeless 显示在主屏幕以外时还是可能被挡住。
+- Chromium / Electron 只对 XWayland 的**主屏幕**使用这个值（其他屏幕当作整块都能用），所以把主屏幕换成有焦点的屏幕，设置成那块屏幕的可用区域（见 [问题 10](#10-外接显示器时只显示在原来的屏幕上)）。
 - 浮动条另外有 `offset_y:100` 的窗口规则，是刚登录时的保险（Typeless 可能在可用区域设置好之前就放好了浮动条）。
 
 ### 7. 工作区
@@ -152,9 +152,70 @@ Typeless：原来的剪贴板 wl-paste 读出来 → 识别结果 wl-copy 放进
   纯 X11 里其他地方鼠标会穿过去。但 XWayland 告诉 mango“哪里接收鼠标”（Wayland 的 input region）时只看 input shape，
   而 Typeless 没有设置 input shape（一直是整个窗口 750×500），所以 mango 以为整个浮动条都接收鼠标。
   （确认方法：用 libXext 的 `XShapeGetRectangles` 读两个 shape；手动把 input shape 设成和 bounding shape 一样后，鼠标就穿过去了。）
-- **对策**：`typeless-clickthrough.py`（常驻）每 0.1 秒把浮动条的 input shape 设成和 bounding shape 一样。
+- **对策**：`typeless-windows.py`（常驻）每 0.1 秒把浮动条的 input shape 设成和 bounding shape 一样。
   录音时出现的按钮部分照常能点（实测：录音时两个 shape 都变成按钮的 164×82，鼠标移到按钮上能聚焦；结束后回到 1×1）。
   Typeless 在运行时才连接 XWayland，XWayland 断开后重新连接。
+
+### 10. 外接显示器时只显示在原来的屏幕上
+
+- **现象**：接了外接显示器，浮动条、回答卡片只出现在最开始的那块屏幕上。
+- **原因**：
+  - 浮动条的 `is_unmanaged_global` 只在同一块屏幕的工作区之间跟着走。
+  - Typeless 自己会把浮动条、回答卡片放在“鼠标所在的屏幕”（每 0.1 秒看一次），但它是 X11 程序，只能从 XWayland 知道鼠标的位置，
+    而 **XWayland 只在鼠标在 X11 窗口上时才更新位置**（实测：真实的鼠标在 (1497, 201)，XWayland 里还是最后经过浮动条时的 (935, 1186)）。
+  - 而且**已经在运行的 Electron 会把鼠标的位置记下来，之后不再问 XWayland**：用 `XWarpPointer` 改 XWayland 里的位置、XTest 的假移动、
+    把位置移进它的窗口再移出来，三种办法都试过，运行中的 Electron 看到的位置都不变（只有新启动的 Electron 第一次问的时候是新的位置）。
+    所以从外面没办法让 Typeless 知道鼠标去了别的屏幕。
+- **对策**：
+  - `xwayland-workarea.py`：XWayland 的主屏幕（XRandR 的 primary）设成 mango 里有焦点的屏幕（`mmsg get all-monitors` 的 `active`），
+    `_NET_WORKAREA` 设成那块屏幕的可用区域（Chromium / Electron 只对主屏幕使用它）。
+  - `typeless-windows.py`：浮动条移到 `_NET_WORKAREA` 的最下面、水平居中（不在这个位置就移，例如拔掉屏幕时 mango 把它移到别的地方）；
+    回答卡片在它的中心不在有焦点的屏幕上时，移到那块屏幕的最下面往上 20 像素（和 Typeless 自己放的位置一样）。
+    直接用 X11 的 `XMoveWindow`（mango 会照办浮动的 X11 窗口的位置请求）。
+- 限制 / 注意：
+  - 回答卡片在内容变化时（回答出来的过程中），Typeless 会按它以为的屏幕重新放（每 80 毫秒、差 2 像素以上就放），所以可能会跳回原来的屏幕一下，这里马上（0.1 秒以内）再移过来。
+  - mango 里浮动条一直算作原来那块屏幕的窗口（只是位置在别的屏幕上），所以在别的屏幕上是“一直显示”（不受那块屏幕的工作区影响）。
+    mango 的 `tagmon` 能把它算成别的屏幕的窗口，但会改它的大小、把焦点给它，所以没有用。
+  - 回答卡片同样算作它出现时的屏幕的窗口；移到别的屏幕后，切换**原来那块屏幕**的工作区时它会跟着隐藏。
+  - XWayland 的主屏幕跟着焦点变：其他 X11 程序如果按主屏幕决定窗口出在哪里，也会跟着变。
+  - 测试：用 mango 的虚拟显示器（`mmsg dispatch create_virtual_output,TEST1` / `destroy_all_virtual_output`，`focusmon` 切换焦点）。
+    插上虚拟显示器时，waybar 的设置弹窗会把它记进 `local.conf`，测试后要恢复。
+
+## 用不了时的检查
+
+在 mango 里的终端执行。括号里是正常时的结果。
+
+```bash
+# 1. 和 Typeless 有关的输入设备（typeless-trigger 正好一个；Typeless Keyboard Helper 是 Typeless 自己的。
+#    Typeless InputHelper Virtual Keyboard 第一次粘贴时才有）
+grep -H . /sys/class/input/event*/device/name | grep -i typeless
+# 2. 常驻的程序（各一个）
+pgrep -af 'typeless-trigger.py serve$|typeless-windows.py$|xwayland-workarea.py$'
+# 3. 权限（两个规则文件都在；两个 getfacl 都有 user:<用户名>:rw-）
+ls /usr/lib/udev/rules.d/70-typeless-uinput.rules /etc/udev/rules.d/70-typeless-trigger.rules
+getfacl -p /dev/uinput | grep user:
+getfacl -p /dev/input/eventNN | grep user:     # NN 是 1 里 typeless-trigger 的数字
+# 4. Typeless 有没有在读虚拟键盘（显示 1 里 typeless-trigger 的 /dev/input/eventNN）
+for p in $(pgrep -f keyboard-helper-child-process); do ls -l /proc/$p/fd | grep -o '/dev/input/event[0-9]*'; done
+# 5. 选键的文件（bind=... tap ... 的行）
+cat ~/.config/mango/typeless-keys.conf
+# 6. 不经过键盘直接让 Typeless 听写（再执行一次结束）
+~/.config/mango/scripts/typeless-trigger.py tap dictation
+```
+
+遇到过的原因：
+
+- **新电脑上没有 `typeless-keys.conf`**（每台电脑各自的，不在仓库里）：一个键都没有绑定。运行 `typeless-keys.py` 选键。
+- **`dotfiles pull` 之后，运行中的常驻程序还是旧的**：文件更新了，运行中的程序不会自己换（例如旧的 `typeless-trigger.py serve` 不认新的 `tap`，从命令行发也没反应）。
+  看进程的启动时间是不是比文件的修改时间早：`ps -o lstart= -p <进程号>`、`stat -c %y <文件>`。**pull 之后重新登录 mango**，或者重新启动那个程序：
+
+  ```bash
+  pkill -f 'typeless-trigger.py serve$'; sleep 0.5
+  setsid ~/.config/mango/scripts/typeless-trigger.py serve >/dev/null 2>&1 &
+  ```
+
+- **6 也没反应，但程序都是新的**：重新启动虚拟键盘程序（上面的命令）。有一次这样就好了，原因没有查到（可能是 Typeless 那边以为虚拟键盘上的某个键一直按着）。
+  还不行的话：Typeless 有没有登录、有没有做完第一次的设置；重新启动 Typeless。
 
 ## 调查的方法
 
@@ -181,5 +242,6 @@ Typeless（或 wl-clipboard、mango）更新后，下面的对策可能就不需
 | kitty / Neovim 的 Ctrl+V（问题 4、5） | Typeless 支持终端的粘贴键（Ctrl+Shift+V），或者用输入法的方式输入（fcitx5 版） | 删掉 `kitty/typeless.conf`、`nvim/lua/config/typeless.lua` |
 | 可用区域（问题 6） | mango 自己设置 `_NET_WORKAREA`（`DISPLAY=:0 xprop -root _NET_WORKAREA`，先停掉 `xwayland-workarea.py`）；或者 Typeless 改成 Wayland 程序 | 删掉 `xwayland-workarea.py` 和它的 `exec_once` |
 | rofi 的入口（问题 8） | Typeless 启动后 `~/.local/share/applications/typeless.desktop` 还在（先停掉 `typeless-launch.sh` 里重新写的部分） | 删掉 `typeless-launch.sh` 里重新写入口的部分，改成手动建一次 |
-| 浮动条的穿透（问题 9） | 停掉 `typeless-clickthrough.py` 后，鼠标在浮动条的空白处时焦点不会到浮动条上（XWayland 或 Typeless 改了） | 删掉 `typeless-clickthrough.py` 和它的 `exec_once` |
+| 浮动条的穿透（问题 9） | 停掉 `typeless-windows.py` 后，鼠标在浮动条的空白处时焦点不会到浮动条上（XWayland 或 Typeless 改了） | 删掉 `typeless-windows.py` 里穿透的部分 |
+| 跟着有焦点的屏幕（问题 10） | 接外接显示器、停掉 `typeless-windows.py` 后，焦点换到别的屏幕时浮动条跟过去（Typeless 改成 Wayland 程序等） | 删掉 `typeless-windows.py` 里移动的部分、`xwayland-workarea.py` 里换主屏幕的部分 |
 | 窗口规则（问题 7） | 窗口的 app_id / 标题变了的话规则就不起作用：`mmsg get all-clients` 看 app_id 和标题 | 改 `typeless.conf` 的 `window_rule` |

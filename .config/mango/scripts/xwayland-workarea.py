@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-# 告诉 X11 程序（XWayland）“可用区域”：屏幕去掉 waybar 的部分
+# 把 mango 的“有焦点的屏幕”和“可用区域”（屏幕去掉 waybar 的部分）告诉 X11 程序（XWayland）
 #
 # X11 程序从 XWayland 的 _NET_WORKAREA 知道可用区域，但 mango 不设置它，于是 X11 程序以为整个屏幕都能用。
 # Typeless（X11 程序）按“可用区域的最下面”放浮动条、Ask Anything 等的卡片，
 # 窗口大小变化、鼠标移到别的屏幕时还会重新这样放，所以下面一截会被 waybar 挡住。
-# 这个程序常驻（mango 的 exec_once 启动），屏幕有变化时、XWayland 重新启动后，重新设置 _NET_WORKAREA。
+#
+# 这个程序常驻（mango 的 exec_once 启动），屏幕或焦点有变化时、XWayland 重新启动后：
+#   1. XWayland 的主屏幕（XRandR 的 primary）设成 mango 里有焦点的屏幕
+#   2. _NET_WORKAREA 设成那块屏幕的可用区域（Chromium / Electron 的程序只对主屏幕使用 _NET_WORKAREA）
+#   typeless-windows.py 按 _NET_WORKAREA 把 Typeless 的浮动条、回答卡片移到有焦点的屏幕上
 #
 #   waybar 的位置和高度：从 waybar 的 config.jsonc 读（position、height）
 #   哪些屏幕上有 waybar：mmsg get all-layers
-#   多块屏幕时：_NET_WORKAREA 只能是一个长方形，Chromium / Electron 的程序（Typeless 等）只把它用在 XWayland 的
-#     主屏幕上（其他屏幕当作整块都能用），所以设置成主屏幕的可用区域
 #   XWayland 没有在运行时不去连接它（连接会让 mango 启动 XWayland）
 
 import ctypes
@@ -35,6 +37,13 @@ def run(*args):
         return ""
 
 
+def mmsg_json(*args):
+    try:
+        return json.loads(run("mmsg", *args))
+    except ValueError:
+        return None
+
+
 def waybar_size():
     """(位置, 高度)。读不到时高度是 0"""
     try:
@@ -47,93 +56,89 @@ def waybar_size():
     return (position.group(1) if position else "top"), (int(height.group(1)) if height else 0)
 
 
-def xwayland_primary():
-    """XWayland 的主屏幕的名字（和 mango 的屏幕名一样）。没有设置主屏幕时是第一块屏幕（和 Chromium 一样）"""
-    try:
-        x11 = ctypes.CDLL(ctypes.util.find_library("X11"))
-        xrandr = ctypes.CDLL(ctypes.util.find_library("Xrandr"))
-    except OSError:
-        return None
-    x11.XOpenDisplay.restype = ctypes.c_void_p
-    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
-    x11.XDefaultRootWindow.restype = ctypes.c_ulong
-    x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
-    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
-    xrandr.XRRGetOutputPrimary.restype = ctypes.c_ulong
-    xrandr.XRRGetOutputPrimary.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+class ScreenResources(ctypes.Structure):
+    _fields_ = [("timestamp", ctypes.c_ulong), ("configTimestamp", ctypes.c_ulong),
+                ("ncrtc", ctypes.c_int), ("crtcs", ctypes.POINTER(ctypes.c_ulong)),
+                ("noutput", ctypes.c_int), ("outputs", ctypes.POINTER(ctypes.c_ulong))]
 
-    class ScreenResources(ctypes.Structure):
-        _fields_ = [("timestamp", ctypes.c_ulong), ("configTimestamp", ctypes.c_ulong),
-                    ("ncrtc", ctypes.c_int), ("crtcs", ctypes.POINTER(ctypes.c_ulong)),
-                    ("noutput", ctypes.c_int), ("outputs", ctypes.POINTER(ctypes.c_ulong))]
 
-    class OutputInfo(ctypes.Structure):
-        _fields_ = [("timestamp", ctypes.c_ulong), ("crtc", ctypes.c_ulong),
-                    ("name", ctypes.c_char_p), ("nameLen", ctypes.c_int)]
+class OutputInfo(ctypes.Structure):
+    _fields_ = [("timestamp", ctypes.c_ulong), ("crtc", ctypes.c_ulong),
+                ("name", ctypes.c_char_p), ("nameLen", ctypes.c_int)]
 
-    xrandr.XRRGetScreenResourcesCurrent.restype = ctypes.POINTER(ScreenResources)
-    xrandr.XRRGetScreenResourcesCurrent.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
-    xrandr.XRRGetOutputInfo.restype = ctypes.POINTER(OutputInfo)
-    xrandr.XRRGetOutputInfo.argtypes = [ctypes.c_void_p, ctypes.POINTER(ScreenResources), ctypes.c_ulong]
-    xrandr.XRRFreeOutputInfo.argtypes = [ctypes.POINTER(OutputInfo)]
-    xrandr.XRRFreeScreenResources.argtypes = [ctypes.POINTER(ScreenResources)]
 
-    display = x11.XOpenDisplay(None)
-    if not display:
-        return None
-    try:
-        root = x11.XDefaultRootWindow(display)
-        resources = xrandr.XRRGetScreenResourcesCurrent(display, root)
+class XWayland:
+    """XWayland 的连接（用完就关：一直连着的话 XWayland 不会在没有 X11 程序时自动退出）"""
+
+    def __init__(self):
+        self.x11 = x11 = ctypes.CDLL(ctypes.util.find_library("X11"))
+        self.xrandr = xrandr = ctypes.CDLL(ctypes.util.find_library("Xrandr"))
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        x11.XDefaultRootWindow.restype = ctypes.c_ulong
+        x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        xrandr.XRRGetOutputPrimary.restype = ctypes.c_ulong
+        xrandr.XRRGetOutputPrimary.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        xrandr.XRRSetOutputPrimary.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong]
+        xrandr.XRRGetScreenResourcesCurrent.restype = ctypes.POINTER(ScreenResources)
+        xrandr.XRRGetScreenResourcesCurrent.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        xrandr.XRRGetOutputInfo.restype = ctypes.POINTER(OutputInfo)
+        xrandr.XRRGetOutputInfo.argtypes = [ctypes.c_void_p, ctypes.POINTER(ScreenResources), ctypes.c_ulong]
+        xrandr.XRRFreeOutputInfo.argtypes = [ctypes.POINTER(OutputInfo)]
+        xrandr.XRRFreeScreenResources.argtypes = [ctypes.POINTER(ScreenResources)]
+        self.display = x11.XOpenDisplay(None)
+        self.root = x11.XDefaultRootWindow(self.display) if self.display else 0
+
+    def close(self):
+        if self.display:
+            self.x11.XCloseDisplay(self.display)
+            self.display = None
+
+    def outputs(self):
+        """{名字: output}（正在使用的屏幕。名字和 mango 的屏幕名一样）"""
+        result = {}
+        resources = self.xrandr.XRRGetScreenResourcesCurrent(self.display, self.root)
         if not resources:
-            return None
+            return result
         try:
-            outputs = [resources.contents.outputs[i] for i in range(resources.contents.noutput)]
-            primary = xrandr.XRRGetOutputPrimary(display, root)
-            for output in ([primary] if primary else []) + outputs:
-                info = xrandr.XRRGetOutputInfo(display, resources, output)
+            for i in range(resources.contents.noutput):
+                output = resources.contents.outputs[i]
+                info = self.xrandr.XRRGetOutputInfo(self.display, resources, output)
                 if not info:
                     continue
-                try:
-                    if info.contents.crtc:  # 正在使用的屏幕
-                        return info.contents.name.decode(errors="replace")
-                finally:
-                    xrandr.XRRFreeOutputInfo(info)
-            return None
+                if info.contents.crtc:
+                    result[info.contents.name.decode(errors="replace")] = output
+                self.xrandr.XRRFreeOutputInfo(info)
         finally:
-            xrandr.XRRFreeScreenResources(resources)
-    finally:
-        x11.XCloseDisplay(display)
+            self.xrandr.XRRFreeScreenResources(resources)
+        return result
+
+    def set_primary(self, name):
+        output = self.outputs().get(name)
+        if output and self.xrandr.XRRGetOutputPrimary(self.display, self.root) != output:
+            self.xrandr.XRRSetOutputPrimary(self.display, self.root, output)
+            self.x11.XSync(self.display, 0)
 
 
-def workarea():
-    """XWayland 的主屏幕的可用区域 (x, y, 宽, 高)；算不出来时 None"""
-    try:
-        monitors = json.loads(run("mmsg", "get", "all-monitors"))["monitors"]
-        layers = json.loads(run("mmsg", "get", "all-layers"))
-        layers = layers.get("layers", []) if isinstance(layers, dict) else layers
-    except (ValueError, KeyError, TypeError):
-        return None
-    with_bar = {layer.get("monitor") for layer in layers if layer.get("name") == "waybar"}
-    position, size = waybar_size()
-    primary = xwayland_primary()
 
-    for m in monitors:
-        x, y, w, h = m["x"], m["y"], m["width"], m["height"]
-        if m["name"] != primary or w <= 0 or h <= 0:
-            continue
-        if m["name"] in with_bar:
-            if position == "bottom":
-                h -= size
-            elif position == "top":
-                y += size
-                h -= size
-            elif position == "left":
-                x += size
-                w -= size
-            elif position == "right":
-                w -= size
-        return x, y, w, h
-    return None
+def workarea(monitor, with_bar):
+    """屏幕的可用区域 (x, y, 宽, 高)"""
+    x, y, w, h = monitor["x"], monitor["y"], monitor["width"], monitor["height"]
+    if monitor["name"] in with_bar:
+        position, size = waybar_size()
+        if position == "bottom":
+            h -= size
+        elif position == "top":
+            y += size
+            h -= size
+        elif position == "left":
+            x += size
+            w -= size
+        elif position == "right":
+            w -= size
+    return x, y, w, h
 
 
 def current():
@@ -145,13 +150,30 @@ def current():
 def update():
     if not run("pgrep", "-x", "Xwayland"):
         return
-    area = workarea()
-    if area is None:
+    data = mmsg_json("get", "all-monitors")
+    layers = mmsg_json("get", "all-layers")
+    if not isinstance(data, dict):
+        return
+    monitors = [m for m in data.get("monitors", []) if m.get("width", 0) > 0 and m.get("height", 0) > 0]
+    active = next((m for m in monitors if m.get("active")), monitors[0] if monitors else None)
+    if active is None:
         if current() is not None:
             run("xprop", "-root", "-remove", "_NET_WORKAREA")
         return
-    if current() != area:
-        run("xprop", "-root", "-f", "_NET_WORKAREA", "32c", "-set", "_NET_WORKAREA", ", ".join(map(str, area)))
+    layers = layers.get("layers", []) if isinstance(layers, dict) else (layers or [])
+    with_bar = {layer.get("monitor") for layer in layers if layer.get("name") == "waybar"}
+
+    xwl = XWayland()
+    if not xwl.display:
+        return
+    try:
+        if len(monitors) > 1:
+            xwl.set_primary(active["name"])
+        area = workarea(active, with_bar)
+        if current() != area:
+            run("xprop", "-root", "-f", "_NET_WORKAREA", "32c", "-set", "_NET_WORKAREA", ", ".join(map(str, area)))
+    finally:
+        xwl.close()
 
 
 def main():
@@ -162,7 +184,7 @@ def main():
     except OSError:
         sys.exit(0)  # 已经在运行
 
-    # 屏幕有变化时 mmsg 输出一行；mango 退出时 mmsg 也结束，这个程序跟着结束
+    # 屏幕、焦点有变化时 mmsg 输出一行；mango 退出时 mmsg 也结束，这个程序跟着结束
     watch = subprocess.Popen(["mmsg", "watch", "all-monitors"], stdout=subprocess.PIPE, text=True)
     update()
     while True:

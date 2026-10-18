@@ -7,7 +7,7 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 | mango | `.config/mango/config.conf` | 快捷键、动画、窗口规则、开机启动 |
 | | `.config/mango/typeless.conf` | Typeless（语音输入）的开机启动、窗口规则（`config.conf` 用 `source=` 读入）；用哪个键写在每台电脑各自的 `typeless-keys.conf`（不放进仓库） |
 | | `.config/mango/local.conf.example` | 每台电脑自己的设置（`local.conf`，不放进仓库）的说明 |
-| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty、打开所有屏幕（Super + Shift + P）、Typeless 的快捷键和选键、浮动条的鼠标穿透、X11 程序的可用区域 |
+| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty、打开所有屏幕（Super + Shift + P）、Typeless 的快捷键和选键、浮动条 / 回答卡片的整理（鼠标穿透、跟着有焦点的屏幕）、X11 程序的可用区域和主屏幕 |
 | | `.config/mango/udev/` | Typeless 的快捷键用的 udev 规则（要用 sudo 复制到 `/etc/udev/rules.d/`） |
 | | `.config/mango/wallpaperd/` | 预先准备好壁纸、切换时不卡顿的壁纸程序（C，需要编译） |
 | waybar | `.config/waybar/config.jsonc`, `style.css` | 底部状态栏 |
@@ -179,6 +179,7 @@ dotfiles pull
   - waybar 的 `config.jsonc`、各个弹窗脚本、fcitx5 的主题：重新登录 mango 最简单
     （只想重启 fcitx5 时：`fcitx5 -r -d`）
   - `wallpaperd.c`、`barprobe.c` 改了的话：重新执行各自的 `build.sh`
+  - Typeless 的常驻程序（`typeless-trigger.py`、`typeless-windows.py`、`xwayland-workarea.py`）改了的话：重新登录 mango（运行中的旧程序不会自己换成新的；见 [docs/typeless.md 的“用不了时的检查”](docs/typeless.md#用不了时的检查)）
   - Neovim 的设置（`.config/nvim/`）：重新打开 nvim
     - 插件的版本（`nvim-pack-lock.json`）变了的话：在 nvim 里执行 `:lua vim.pack.update(nil, { target = "lockfile" })`，确认后（`:write`）重新打开 nvim；之后再执行 `:TSUpdate` 更新语法高亮的解析器
 - 只想先看看 GitHub 上有什么新的提交：`dotfiles fetch` 后 `dotfiles log --oneline main..origin/main`
