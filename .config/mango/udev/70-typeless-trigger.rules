@@ -1,0 +1,6 @@
+# Typeless 用的虚拟键盘“typeless-trigger”（.config/mango/scripts/typeless-trigger.py 建的）
+# 安装：sudo install -m 644 ~/.config/mango/udev/70-typeless-trigger.rules /etc/udev/rules.d/
+#       sudo udevadm control --reload-rules
+# - TAG+="uaccess"：只给当前登录的用户读写这一个设备的权限（真的键盘仍然只有 root / input 组能读）
+# - LIBINPUT_IGNORE_DEVICE：mango（libinput）不使用这个设备，虚拟的按键不会传给别的程序
+ACTION!="remove", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="typeless-trigger", TAG+="uaccess", ENV{LIBINPUT_IGNORE_DEVICE}="1"

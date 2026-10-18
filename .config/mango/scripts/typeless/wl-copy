@@ -1,0 +1,14 @@
+#!/bin/bash
+# Typeless 专用的 wl-copy 替身（只有通过 typeless-launch.sh 启动的 Typeless 的 PATH 里有这个文件夹）
+#
+# Typeless 启动 wl-copy 时把标准输出 / 标准错误关掉了。wl-clipboard（2.3.0 以后）遇到这种情况会
+# “launched with a closed standard file descriptor … Aborting.” 直接退出，识别结果放不进剪贴板，粘贴不出文字
+# （Typeless 改用 XWayland 的剪贴板，又会在读剪贴板时和自己互相等待、卡死）。
+# 这里把关着的 0 / 1 / 2 号接到 /dev/null，再交给真正的 wl-copy
+for fd in 0 1 2; do
+    [ -e "/proc/$$/fd/$fd" ] || eval "exec $fd<>/dev/null"
+done
+# 记下 Typeless 放进剪贴板的时间（只更新文件的时间，不写内容）。Typeless 放进剪贴板后紧接着按 Ctrl+V，
+# Neovim 用这个时间判断普通模式下收到的 Ctrl+V 是不是 Typeless 发的（见 ~/.config/nvim/lua/config/typeless.lua）
+touch "${XDG_RUNTIME_DIR:-/tmp}/typeless-clipboard-time" 2>/dev/null
+exec /usr/bin/wl-copy "$@"

@@ -1,0 +1,35 @@
+#!/bin/bash
+# Typeless 专用的 wl-paste 替身（只有通过 typeless-launch.sh 启动的 Typeless 的 PATH 里有这个文件夹）
+#
+# 1. 和 wl-copy 替身一样，把关着的标准输入 / 输出 / 错误接到 /dev/null（关着的话 wl-clipboard 会直接退出）
+# 2. 保险：Typeless 读剪贴板时会停下来等 wl-paste 的结果。剪贴板由 Typeless 自己（XWayland 窗口）提供时，
+#    wl-paste 向它要内容，它却在等 wl-paste → 互相等，Typeless 卡死（wl-copy 失败时会变成这样）。
+#    这里调用真正的 wl-paste，TIMEOUT 秒还没结束就连同它的子进程（cat）一起结束，返回空的结果，
+#    让 Typeless 最多停 TIMEOUT 秒。平时（几毫秒就结束）和直接用 wl-paste 一样
+TIMEOUT=2
+for fd in 0 1 2; do
+    [ -e "/proc/$$/fd/$fd" ] || eval "exec $fd<>/dev/null"
+done
+REAL=/usr/bin/wl-paste
+
+out=$(mktemp) || exec "$REAL" "$@"
+trap 'rm -f "$out"' EXIT
+
+# 输出先写到临时文件：卡住的 wl-paste / cat 不拿着 Typeless 的管道，什么时候交出结果由这里决定
+# setsid：新的进程组，超时时能把 wl-paste 和它启动的 cat 一起结束
+setsid "$REAL" "$@" > "$out" &
+pid=$!
+
+for ((i = 0; i < TIMEOUT * 100; i++)); do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.01
+done
+
+if kill -0 "$pid" 2>/dev/null; then
+    kill -TERM -- "-$pid" 2>/dev/null
+    exit 1
+fi
+wait "$pid"
+status=$?
+cat "$out"
+exit "$status"

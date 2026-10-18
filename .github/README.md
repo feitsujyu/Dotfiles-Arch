@@ -5,8 +5,10 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 | 程序 | 文件 | 内容 |
 |---|---|---|
 | mango | `.config/mango/config.conf` | 快捷键、动画、窗口规则、开机启动 |
+| | `.config/mango/typeless.conf` | Typeless（语音输入）的快捷键、开机启动（`config.conf` 用 `source=` 读入） |
 | | `.config/mango/local.conf.example` | 每台电脑自己的设置（`local.conf`，不放进仓库）的说明 |
-| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty、打开所有屏幕（Super + Shift + P） |
+| | `.config/mango/scripts/` | 壁纸切换、亮度调节、fcitx5 字体跟随 kitty、打开所有屏幕（Super + Shift + P）、Typeless 的快捷键、X11 程序的可用区域 |
+| | `.config/mango/udev/` | Typeless 的快捷键用的 udev 规则（要用 sudo 复制到 `/etc/udev/rules.d/`） |
 | | `.config/mango/wallpaperd/` | 预先准备好壁纸、切换时不卡顿的壁纸程序（C，需要编译） |
 | waybar | `.config/waybar/config.jsonc`, `style.css` | 底部状态栏 |
 | | `.config/waybar/scripts/` | Wi-Fi / 蓝牙 / 音量 / 亮度 / 设置弹窗（Python + GTK3 layer shell），网络模块（连接速率） |
@@ -19,6 +21,7 @@ Arch Linux + [mango](https://github.com/mangowm/mango)（Wayland 合成器）的
 | | `.local/share/fcitx5/inputmethod/tiger.conf` | 虎码输入法设置 |
 | | `.local/share/fcitx5/addon/repeatlast.conf`, `lua/repeatlast/` | `;` + 空格 重复上一次输入（fcitx5-lua） |
 | bash | `.bashrc` | 包括 `dotfiles` 命令 |
+| 说明 | `.github/docs/` | [Neovim](docs/neovim.md)、[Typeless](docs/typeless.md) 的详细说明（原理、遇到过的问题） |
 
 ## 在新电脑上恢复
 
@@ -108,7 +111,40 @@ Neovim 以后想加的功能（现在没有装）：
 
 图片显示、标题 / 代码块底色的半透明用的是 kitty 的功能，在别的终端里不显示图片、底色不透明（不会出错）。
 
-### 6. 重新登录 mango
+设置的内容、快捷键和设置时遇到的问题见 [docs/neovim.md](docs/neovim.md)。
+
+### 6. Typeless（语音输入，可选）
+
+[Typeless](https://www.typeless.com/) 是 AUR 的 `typeless-bin`。这里**不把用户加入 `input` 组**，用日语键盘的单键代替 Typeless 的快捷键：
+
+| 键 | 功能（Typeless 那边的快捷键保持默认） |
+|---|---|
+| `変換` | 听写（RightAlt） |
+| `無変換` | Ask Anything（RightAlt + Space） |
+| `カタカナひらがな` | 翻译模式（RightAlt + RightShift） |
+
+用法：轻按一次开始说话，说完再轻按一次（任意一个键）结束。按住不放的话 Typeless 会取消录音、显示快捷键一览。
+
+需要做一次 udev 规则（只给当前登录的用户读 Typeless 专用的虚拟键盘的权限）：
+
+```bash
+sudo install -m 644 ~/.config/mango/udev/70-typeless-trigger.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+```
+
+Typeless 由 mango 在后台启动（`.config/mango/typeless.conf` 的 `exec_once`，通过 `.config/mango/scripts/typeless-launch.sh`）。
+rofi 的 “Typeless” 也要通过这个脚本启动，入口 `~/.local/share/applications/typeless.desktop` 由这个脚本自动生成（不在仓库里）。
+设置的原理、遇到过的问题（粘贴不出来、卡死、被 waybar 挡住等）和 Typeless 更新后的检查方法见 [docs/typeless.md](docs/typeless.md)。
+
+Typeless 的设置都放在单独的文件里。**不用 Typeless 的电脑**把读入它们的这几行注释掉就行（不需要 udev 规则和 `.desktop` 文件）：
+
+| 文件 | 读入 Typeless 设置的那一行 |
+|---|---|
+| `.config/mango/config.conf` | `source=~/.config/mango/typeless.conf` |
+| `.config/kitty/kitty.conf` | `include typeless.conf` |
+| `.config/nvim/init.lua` | `require("config.typeless")` |
+
+### 7. 重新登录 mango
 
 waybar、fcitx5、壁纸等都由 mango 的 `exec_once` 启动。
 

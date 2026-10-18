@@ -22,3 +22,4 @@ require("plugins.img-clip")    -- 从剪贴板粘贴图片（img-clip.nvim）
 require("plugins.lsp")         -- Markdown 的语言服务器 marksman（nvim-lspconfig）
 
 require("config.kitty-transparency") -- kitty 里让标题、代码块的底色半透明
+require("config.typeless")           -- Typeless（语音输入）：Ctrl+V 粘贴剪贴板；不用 Typeless 的电脑注释掉
